@@ -1,0 +1,91 @@
+/**
+ * AI SDK Provider for Pi Coding Agent
+ *
+ * This provider bridges Pi Coding Agent's session-based API to the
+ * AI SDK's LanguageModelV3 interface, enabling seamless use of Pi's
+ * 15+ LLM providers with AI SDK's streamText(), generateText(),
+ * useChat(), and ai-elements components.
+ *
+ * @module pi
+ */
+
+/**
+ * Creates a new Pi provider instance and the default provider instance.
+ * @see {@link createPi} for creating custom provider instances
+ * @see {@link pi} for the default provider instance
+ */
+export { createPi, pi } from './pi-provider.js';
+
+/**
+ * Type definitions for the Pi provider.
+ * @see {@link PiProvider} for the provider interface
+ * @see {@link PiProviderSettings} for provider configuration options
+ */
+export type { PiProvider } from './pi-provider.js';
+
+/**
+ * Language model implementation for Pi.
+ * This class implements the AI SDK's LanguageModelV3 interface.
+ */
+export { PiLanguageModel } from './pi-language-model.js';
+
+/**
+ * Type definitions for the Pi provider.
+ * @see {@link PiModelId} for model identifier format
+ * @see {@link PiProviderSettings} for provider-level configuration
+ * @see {@link PiLanguageModelSettings} for model-level configuration
+ * @see {@link PiLanguageModelOptions} for model constructor options
+ * @see {@link Logger} for custom logging interface
+ * @see {@link PiProviderMetadata} for stream part metadata
+ */
+export type {
+  PiModelId,
+  PiProviderSettings,
+  PiLanguageModelSettings,
+  PiLanguageModelOptions,
+  Logger,
+  PiProviderMetadata,
+  ToolStreamState,
+  ParsedModelId,
+} from './types.js';
+
+export type { PiErrorMetadata } from './errors.js';
+
+/**
+ * Error handling utilities for Pi provider.
+ * These functions help create and identify specific error types.
+ */
+export {
+  isAuthenticationError,
+  isTimeoutError,
+  isContextOverflowError,
+  getErrorMetadata,
+  createAPICallError,
+  createAuthenticationError,
+  createTimeoutError,
+  createContextOverflowError,
+  handlePiError,
+} from './errors.js';
+
+/**
+ * Message conversion utilities.
+ * Converts AI SDK ModelMessage[] to Pi SDK Context format.
+ */
+export { convertToPiMessages, buildPromptFromContext } from './convert-to-pi-messages.js';
+
+/**
+ * Finish reason mapping.
+ * Maps Pi SDK stopReason values to AI SDK finish reasons.
+ */
+export { mapPiFinishReason } from './map-pi-finish-reason.js';
+
+/**
+ * Validation utilities.
+ * Validates model IDs, provider settings, and model settings.
+ */
+export {
+  parseModelId,
+  validateProviderSettings,
+  validateModelSettings,
+  validateModelAvailability,
+} from './validation.js';
