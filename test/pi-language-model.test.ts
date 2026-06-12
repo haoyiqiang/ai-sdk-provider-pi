@@ -750,5 +750,63 @@ describe('PiLanguageModel', () => {
 
       await promise2;
     });
+
+    it('creates new session after prompt error (invalidation)', async () => {
+      const model = new PiLanguageModel(createModelOptions());
+
+      // First call triggers prompt error
+      const promise1 = model.doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'First' }] }],
+      });
+
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+
+      // Simulate prompt failure
+      mockSession.rejectPrompt(new Error('Prompt failed'));
+
+      // Wait for rejection with proper error handling
+      await expect(promise1).rejects.toThrow();
+
+      // After invalidation, the old session should be cleared
+      expect((model as any).session).toBeNull();
+      expect((model as any).sessionId).toBeUndefined();
+
+      // Create a new mock session for the second call
+      const newMockSession = createMockSession();
+      piCodingAgent.__setMockSession(newMockSession.session);
+
+      // Second call should create a fresh session
+      const promise2 = model.doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Second' }] }],
+      });
+
+      // Wait for prompt call on the NEW session
+      await vi.waitFor(() => expect(newMockSession.promptCalls.length).toBe(1));
+
+      // Clean up
+      newMockSession.emitEvent({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [],
+          api: 'anthropic-messages',
+          provider: 'anthropic',
+          model: 'claude-sonnet-4',
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop',
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+
+      newMockSession.resolvePrompt();
+
+      newMockSession.emitEvent({
+        type: 'agent_end',
+        messages: [],
+        willRetry: false,
+      });
+
+      await promise2;
+    });
   });
 });

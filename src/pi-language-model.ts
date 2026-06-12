@@ -140,6 +140,21 @@ export class PiLanguageModel implements LanguageModelV3 {
     }
   }
 
+  /**
+   * Invalidates the current session without disposing the underlying Pi session.
+   * Used for error recovery — when a session.prompt() fails, we clear the local
+   * reference so the next call creates a fresh session automatically.
+   * Unlike dispose(), this does not call session.dispose() because the session
+   * may already be in a broken state.
+   */
+  private invalidateSession(): void {
+    if (this.session) {
+      this.logger.info(`Invalidating Pi session after error: ${this.sessionId}`);
+      this.session = null;
+      this.sessionId = undefined;
+    }
+  }
+
   private async ensureSession(): Promise<AgentSession> {
     if (this.disposed) {
       this.disposed = false; // Reset so a new session can be created
@@ -277,17 +292,27 @@ export class PiLanguageModel implements LanguageModelV3 {
           } catch (error) {
             unsubscribe();
             cleanupAbortListener?.();
-            reject(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
+            try {
+              reject(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
+            } catch (mapped) {
+              reject(mapped);
+            }
           }
         });
 
         session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
           unsubscribe();
           cleanupAbortListener?.();
-          reject(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
+          this.invalidateSession();
+          try {
+            reject(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
+          } catch (mapped) {
+            reject(mapped);
+          }
         });
       });
     } catch (error) {
+      this.invalidateSession();
       throw handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId });
     }
   }
@@ -491,11 +516,11 @@ export class PiLanguageModel implements LanguageModelV3 {
               }
             } catch (error) {
               this.logger.error(`Error processing Pi event: ${error}`);
+              cleanupAbortListener?.();
+              unsubscribe();
               try {
                 controller.error(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
               } catch { /* controller may already be closed */ }
-              cleanupAbortListener?.();
-              unsubscribe();
             }
           });
 
@@ -512,11 +537,12 @@ export class PiLanguageModel implements LanguageModelV3 {
 
           session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
             this.logger.error(`Pi session prompt failed: ${error}`);
+            this.invalidateSession();
+            cleanupAbortListener?.();
+            unsubscribe();
             try {
               controller.error(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
             } catch { /* controller may already be closed */ }
-            cleanupAbortListener?.();
-            unsubscribe();
           });
         },
 
@@ -529,6 +555,7 @@ export class PiLanguageModel implements LanguageModelV3 {
 
       return { stream, request: { body: { prompt: promptText, model: this.modelId } } };
     } catch (error) {
+      this.invalidateSession();
       throw handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId });
     }
   }
