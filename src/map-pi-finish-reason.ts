@@ -39,6 +39,8 @@ export function mapPiFinishReason(
       return { unified: 'stop', raw };
     case 'tool_use':
       return { unified: 'tool-calls', raw };
+    case 'toolUse':
+      return { unified: 'tool-calls', raw };
     // OpenAI-style stop reasons
     case 'stop':
       return { unified: 'stop', raw };

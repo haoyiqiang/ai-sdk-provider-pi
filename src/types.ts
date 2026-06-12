@@ -1,4 +1,4 @@
-import type { Model, Api, Provider, ThinkingLevel as PiThinkingLevel } from '@earendil-works/pi-ai';
+import type { Model, Api, Provider, ModelThinkingLevel as PiThinkingLevel } from '@earendil-works/pi-ai';
 import type { AuthStorage } from '@earendil-works/pi-coding-agent';
 import type { ModelRegistry } from '@earendil-works/pi-coding-agent';
 import type { SessionManager } from '@earendil-works/pi-coding-agent';

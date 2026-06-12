@@ -79,6 +79,7 @@ export class PiLanguageModel implements LanguageModelV3 {
   // Reused session for conversation continuity
   private session: AgentSession | null = null;
   private sessionId: string | undefined;
+  private disposed = false;
 
   private static readonly UNKNOWN_TOOL_NAME = 'unknown_tool';
   private static readonly MAX_TOOL_RESULT_SIZE = 10000;
@@ -119,7 +120,31 @@ export class PiLanguageModel implements LanguageModelV3 {
     };
   }
 
+  /**
+   * Dispose the underlying Pi session and release resources.
+   * After calling dispose(), the next doGenerate/doStream call will create a fresh session.
+   * Safe to call multiple times.
+   */
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    if (this.session) {
+      try {
+        this.session.dispose();
+        this.logger.info(`Pi session disposed: ${this.sessionId}`);
+      } catch (error) {
+        this.logger.error(`Error disposing Pi session: ${error}`);
+      }
+      this.session = null;
+      this.sessionId = undefined;
+    }
+  }
+
   private async ensureSession(): Promise<AgentSession> {
+    if (this.disposed) {
+      this.disposed = false; // Reset so a new session can be created
+      this.logger.info('Creating new session after dispose()');
+    }
     if (this.session) {
       return this.session;
     }
@@ -173,10 +198,16 @@ export class PiLanguageModel implements LanguageModelV3 {
       const allWarnings = this.generateAllWarnings(options, promptText, conversionWarnings);
       const session = await this.ensureSession();
 
+      let cleanupAbortListener: (() => void) | undefined;
       if (options.abortSignal) {
-        options.abortSignal.addEventListener('abort', () => {
+        const onAbort = () => {
           session.abort().catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
-        });
+        };
+        options.abortSignal.addEventListener('abort', onAbort);
+        cleanupAbortListener = () => options.abortSignal?.removeEventListener('abort', onAbort);
+        if (options.abortSignal.aborted) {
+          onAbort();
+        }
       }
 
       let text = '';
@@ -216,6 +247,7 @@ export class PiLanguageModel implements LanguageModelV3 {
               }
               case 'agent_end': {
                 unsubscribe();
+                cleanupAbortListener?.();
                 piMeta.durationMs = Date.now() - startTime;
 
                 const content: LanguageModelV3Content[] = [];
@@ -238,12 +270,15 @@ export class PiLanguageModel implements LanguageModelV3 {
               }
             }
           } catch (error) {
+            unsubscribe();
+            cleanupAbortListener?.();
             reject(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
           }
         });
 
         session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
           unsubscribe();
+          cleanupAbortListener?.();
           reject(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
         });
       });
@@ -272,6 +307,7 @@ export class PiLanguageModel implements LanguageModelV3 {
       let finishReason: LanguageModelV3FinishReason = { unified: 'stop', raw: undefined };
       let usage: LanguageModelV3Usage = this.createEmptyUsage();
       let piMeta: PiProviderMetadata = {};
+      let cleanupAbortListener: (() => void) | undefined;
 
       const stream = new ReadableStream<LanguageModelV3StreamPart>({
         start: (controller) => {
@@ -432,6 +468,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                   });
 
                   controller.close();
+                  cleanupAbortListener?.();
                   unsubscribe();
                   break;
                 }
@@ -447,16 +484,19 @@ export class PiLanguageModel implements LanguageModelV3 {
               try {
                 controller.error(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
               } catch { /* controller may already be closed */ }
+              cleanupAbortListener?.();
               unsubscribe();
             }
           });
 
           if (options.abortSignal) {
-            options.abortSignal.addEventListener('abort', () => {
+            const onAbort = () => {
               session.abort().catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
-            });
+            };
+            options.abortSignal.addEventListener('abort', onAbort);
+            cleanupAbortListener = () => options.abortSignal?.removeEventListener('abort', onAbort);
             if (options.abortSignal.aborted) {
-              session.abort().catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
+              onAbort();
             }
           }
 
@@ -465,12 +505,14 @@ export class PiLanguageModel implements LanguageModelV3 {
             try {
               controller.error(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
             } catch { /* controller may already be closed */ }
+            cleanupAbortListener?.();
             unsubscribe();
           });
         },
 
         cancel: () => {
           this.logger.info('Stream cancelled by consumer');
+          cleanupAbortListener?.();
           session.abort().catch((err: unknown) => this.logger.error(`Abort error on cancel: ${err}`));
         },
       });
