@@ -6,6 +6,8 @@ import type { AssistantMessage, AssistantMessageEvent } from '@earendil-works/pi
 
 // ─── Mock factories ───
 
+let mockSystemPrompt: string | undefined;
+
 function createMockSession(): {
   session: AgentSession;
   listeners: Array<(event: AgentSessionEvent) => void>;
@@ -24,8 +26,20 @@ function createMockSession(): {
   let promptResolve: (() => void) | null = null;
   let promptReject: ((error: Error) => void) | null = null;
 
+  const mockAgent = {
+    state: {
+      systemPrompt: '',
+      messages: [],
+      tools: [],
+      model: null,
+      thinkingLevel: 'off',
+    },
+    waitForIdle: vi.fn(),
+  };
+
   const session = {
     sessionId: 'test-session-123',
+    agent: mockAgent,
     subscribe: vi.fn((listener: (event: AgentSessionEvent) => void) => {
       listeners.push(listener);
       return () => {
@@ -295,6 +309,85 @@ describe('PiLanguageModel', () => {
       expect(result.finishReason.unified).toBe('tool-calls');
     });
 
+    it('passes system prompt to Pi session', async () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const generatePromise = model.doGenerate({
+        prompt: [
+          { role: 'system', content: 'You are a test assistant.' },
+          { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+        ],
+      });
+
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+
+      // Verify system prompt was passed to session
+      expect(mockSession.session.agent.state.systemPrompt).toBe('You are a test assistant.');
+
+      mockSession.emitEvent({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [],
+          api: 'anthropic-messages',
+          provider: 'anthropic',
+          model: 'claude-sonnet-4',
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop',
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+
+      mockSession.resolvePrompt();
+
+      mockSession.emitEvent({
+        type: 'agent_end',
+        messages: [],
+        willRetry: false,
+      });
+
+      await generatePromise;
+    });
+
+    it('includes responseModel and responseId in providerMetadata', async () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const generatePromise = model.doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+      });
+
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+
+      mockSession.emitEvent({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [],
+          api: 'anthropic-messages',
+          provider: 'anthropic',
+          model: 'claude-sonnet-4',
+          responseModel: 'claude-sonnet-4-20250514',
+          responseId: 'resp_abc123',
+          usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop',
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+
+      mockSession.resolvePrompt();
+
+      mockSession.emitEvent({
+        type: 'agent_end',
+        messages: [],
+        willRetry: false,
+      });
+
+      const result = await generatePromise;
+      const providerMeta = result.providerMetadata;
+      expect(providerMeta).toBeDefined();
+      // Primitive values are wrapped in { value: string } by toProviderMetadata()
+      expect(providerMeta?.responseModel).toEqual({ value: 'claude-sonnet-4-20250514' });
+      expect(providerMeta?.responseId).toEqual({ value: 'resp_abc123' });
+    });
+
     it('reports warnings for unsupported parameters', async () => {
       const model = new PiLanguageModel(createModelOptions());
       const generatePromise = model.doGenerate({
@@ -475,6 +568,69 @@ describe('PiLanguageModel', () => {
       const reasoningDeltas = parts.filter(p => p.type === 'reasoning-delta');
       expect(reasoningDeltas.length).toBe(1);
       expect(reasoningDeltas[0].delta).toBe('Hmm...');
+    });
+  });
+
+  describe('system prompt in doStream', () => {
+    let mockSession: ReturnType<typeof createMockSession>;
+
+    beforeEach(() => {
+      mockSession = createMockSession();
+      piCodingAgent.__setMockSession(mockSession.session);
+    });
+
+    it('passes system prompt to Pi session in stream mode', async () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const { stream: rawStream } = await model.doStream({
+        prompt: [
+          { role: 'system', content: 'You are a helpful stream assistant.' },
+          { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+        ],
+      });
+
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+
+      // Verify system prompt was passed
+      expect(mockSession.session.agent.state.systemPrompt).toBe('You are a helpful stream assistant.');
+
+      mockSession.emitEvent({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [],
+          api: 'anthropic-messages',
+          provider: 'anthropic',
+          model: 'claude-sonnet-4',
+          responseModel: 'claude-sonnet-4-20250514',
+          responseId: 'resp_stream_123',
+          usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop',
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+
+      mockSession.resolvePrompt();
+
+      mockSession.emitEvent({
+        type: 'agent_end',
+        messages: [],
+        willRetry: false,
+      });
+
+      // Read the stream to completion
+      const reader = rawStream.getReader();
+      const parts: any[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+      }
+
+      const finishPart = parts.find(p => p.type === 'finish');
+      expect(finishPart).toBeDefined();
+      // Primitive values are wrapped in { value: string } by toProviderMetadata()
+      expect(finishPart.providerMetadata?.responseModel).toEqual({ value: 'claude-sonnet-4-20250514' });
+      expect(finishPart.providerMetadata?.responseId).toEqual({ value: 'resp_stream_123' });
     });
   });
 

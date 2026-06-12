@@ -216,4 +216,13 @@ export interface PiProviderMetadata {
   provider?: string;
   /** Model ID */
   modelId?: string;
+  /**
+   * The actual model ID used by the provider (e.g., 'claude-sonnet-4-20250514').
+   * May differ from the requested modelId due to model version resolution.
+   */
+  responseModel?: string;
+  /**
+   * Unique identifier for the LLM response, provided by some APIs.
+   */
+  responseId?: string;
 }

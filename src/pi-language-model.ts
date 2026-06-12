@@ -198,6 +198,11 @@ export class PiLanguageModel implements LanguageModelV3 {
       const allWarnings = this.generateAllWarnings(options, promptText, conversionWarnings);
       const session = await this.ensureSession();
 
+      // Pass system prompt to Pi session if provided
+      if (context.systemPrompt) {
+        session.agent.state.systemPrompt = context.systemPrompt;
+      }
+
       let cleanupAbortListener: (() => void) | undefined;
       if (options.abortSignal) {
         const onAbort = () => {
@@ -241,7 +246,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                   const msg = event.message as AssistantMessage;
                   usage = this.extractUsage(msg.usage);
                   finishReason = mapPiFinishReason(msg.stopReason);
-                  piMeta = { sessionId: this.sessionId, provider: msg.provider, modelId: msg.model };
+                  piMeta = { sessionId: this.sessionId, provider: msg.provider, modelId: msg.model, responseModel: msg.responseModel, responseId: msg.responseId };
                 }
                 break;
               }
@@ -298,6 +303,11 @@ export class PiLanguageModel implements LanguageModelV3 {
       const promptText = buildPromptFromContext(context);
       const allWarnings = this.generateAllWarnings(options, promptText, conversionWarnings);
       const session = await this.ensureSession();
+
+      // Pass system prompt to Pi session if provided
+      if (context.systemPrompt) {
+        session.agent.state.systemPrompt = context.systemPrompt;
+      }
 
       let hasStartedText = false;
       let hasStartedReasoning = false;
@@ -450,7 +460,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                     const msg = event.message as AssistantMessage;
                     usage = this.extractUsage(msg.usage);
                     finishReason = mapPiFinishReason(msg.stopReason);
-                    piMeta = { sessionId: this.sessionId, provider: msg.provider, modelId: msg.model };
+                    piMeta = { sessionId: this.sessionId, provider: msg.provider, modelId: msg.model, responseModel: msg.responseModel, responseId: msg.responseId };
                   }
                   break;
                 }
