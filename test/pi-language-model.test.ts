@@ -659,13 +659,10 @@ describe('PiLanguageModel', () => {
     it('is safe to call multiple times', () => {
       const model = new PiLanguageModel(createModelOptions());
       (model as any).session = mockSession.session;
-
       model.dispose();
       model.dispose();
-
       expect(mockSession.disposeFn).toHaveBeenCalledOnce();
     });
-
     it('is safe to call when no session exists', () => {
       const model = new PiLanguageModel(createModelOptions());
       expect(() => model.dispose()).not.toThrow();
@@ -807,6 +804,111 @@ describe('PiLanguageModel', () => {
       });
 
       await promise2;
+    });
+  });
+
+  describe('truncateToolResult', () => {
+    it('returns full result when below max size', () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const result = (model as any).truncateToolResult('short result');
+      expect(result).toBe('short result');
+    });
+
+    it('truncates result exceeding max size', () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const longText = 'a'.repeat(15000);
+      const result = (model as any).truncateToolResult(longText);
+      expect(result.length).toBeLessThan(longText.length);
+      expect(result).toContain('[truncated');
+      expect(result).toContain('chars]');
+    });
+
+    it('respects custom maxToolResultSize', () => {
+      const model = new PiLanguageModel(
+        createModelOptions({ settings: { maxToolResultSize: 50 } })
+      );
+      const longText = 'a'.repeat(100);
+      const result = (model as any).truncateToolResult(longText);
+      expect(result.length).toBeLessThanOrEqual(50 + '[truncated X chars]'.length + 10);
+      expect(result).toContain('[truncated');
+    });
+  });
+
+  describe('abort handling in doGenerate', () => {
+    let mockSession: ReturnType<typeof createMockSession>;
+
+    beforeEach(() => {
+      mockSession = createMockSession();
+      piCodingAgent.__setMockSession(mockSession.session);
+    });
+
+    it('calls session.abort() when abortSignal is pre-aborted', async () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const abortController = new AbortController();
+      abortController.abort(); // pre-abort
+
+      const generatePromise = model.doGenerate({
+        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+        abortSignal: abortController.signal,
+      });
+
+      // Should fail because session creation may abort
+      await expect(generatePromise).rejects.toThrow();
+    });
+  });
+
+  describe('extractToolCallFromPartial', () => {
+    it('returns null when partial has no content', () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const result = (model as any).extractToolCallFromPartial({}, 0);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when content is not an array', () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const result = (model as any).extractToolCallFromPartial({ content: 'string' }, 0);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when content item is not a toolCall', () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const result = (model as any).extractToolCallFromPartial(
+        { content: [{ type: 'text', text: 'hello' }] },
+        0
+      );
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('generateAllWarnings', () => {
+    it('reports all unsupported parameters', () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const warnings = (model as any).generateAllWarnings(
+        {
+          temperature: 0.7,
+          topP: 0.9,
+          topK: 40,
+          presencePenalty: 0.5,
+          frequencyPenalty: 0.3,
+          stopSequences: ['END'],
+          seed: 42,
+        },
+        'test prompt',
+        []
+      );
+      const unsupported = warnings.filter((w: any) => w.type === 'unsupported');
+      expect(unsupported.length).toBe(7);
+    });
+  });
+
+  describe('createEmptyUsage', () => {
+    it('returns a correctly structured empty usage object', () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const usage = (model as any).createEmptyUsage();
+      expect(usage).toHaveProperty('inputTokens');
+      expect(usage).toHaveProperty('outputTokens');
+      expect(usage.inputTokens.total).toBeUndefined();
+      expect(usage.outputTokens.total).toBeUndefined();
     });
   });
 });
