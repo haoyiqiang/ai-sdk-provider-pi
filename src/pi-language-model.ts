@@ -155,6 +155,120 @@ export class PiLanguageModel implements LanguageModelV3 {
     }
   }
 
+  // ─── Shared Helpers ───
+
+  /**
+   * Extracts usage, finishReason, and providerMetadata from a message_end event.
+   */
+  private extractMessageEndData(event: AgentSessionEvent): {
+    usage: LanguageModelV3Usage;
+    finishReason: LanguageModelV3FinishReason;
+    piMeta: PiProviderMetadata;
+  } {
+    let usage: LanguageModelV3Usage = this.createEmptyUsage();
+    let finishReason: LanguageModelV3FinishReason = { unified: 'stop', raw: undefined };
+    let piMeta: PiProviderMetadata = {};
+
+    if (event.type === 'message_end' && event.message?.role === 'assistant') {
+      const msg = event.message as AssistantMessage;
+      usage = this.extractUsage(msg.usage);
+      finishReason = mapPiFinishReason(msg.stopReason);
+      piMeta = {
+        sessionId: this.sessionId,
+        provider: msg.provider,
+        modelId: msg.model,
+        responseModel: msg.responseModel,
+        responseId: msg.responseId,
+      };
+    }
+
+    return { usage, finishReason, piMeta };
+  }
+
+  /**
+   * Sets up an abort signal handler for the session.
+   * Returns a cleanup function to remove the listener.
+   */
+  private setupAbortHandler(
+    abortSignal: AbortSignal | undefined,
+    session: AgentSession
+  ): (() => void) | undefined {
+    if (!abortSignal) return undefined;
+
+    const onAbort = () => {
+      session.abort().catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
+    };
+
+    abortSignal.addEventListener('abort', onAbort);
+
+    if (abortSignal.aborted) {
+      onAbort();
+    }
+
+    return () => abortSignal.removeEventListener('abort', onAbort);
+  }
+
+  /**
+   * Handles a session.prompt() failure: unsubscribes, cleans up abort listener,
+   * invalidates the session, and calls the provided error handler.
+   */
+  private handlePromptError(
+    error: unknown,
+    unsubscribe: () => void,
+    cleanupAbort: (() => void) | undefined,
+    onError: (mappedError: unknown) => void
+  ): void {
+    unsubscribe();
+    cleanupAbort?.();
+    this.invalidateSession();
+    try {
+      onError(
+        handlePiError(error, {
+          provider: this.model.provider,
+          modelId: this.model.id,
+          sessionId: this.sessionId,
+        })
+      );
+    } catch (mapped) {
+      onError(mapped);
+    }
+  }
+
+  /**
+   * Finalizes a doStream controller: closes any open text/reasoning parts,
+   * enqueues the finish event, closes the controller, and cleans up.
+   */
+  private finalizeStreamParts(
+    controller: ReadableStreamDefaultController<LanguageModelV3StreamPart>,
+    activeTextPartId: string | undefined,
+    activeReasoningPartId: string | undefined,
+    startTime: number,
+    piMeta: PiProviderMetadata,
+    finishReason: LanguageModelV3FinishReason,
+    usage: LanguageModelV3Usage,
+    cleanupAbort: (() => void) | undefined,
+    unsubscribe: () => void
+  ): void {
+    if (activeTextPartId) {
+      controller.enqueue({ type: 'text-end', id: activeTextPartId });
+    }
+    if (activeReasoningPartId) {
+      controller.enqueue({ type: 'reasoning-end', id: activeReasoningPartId });
+    }
+    piMeta.durationMs = Date.now() - startTime;
+
+    controller.enqueue({
+      type: 'finish',
+      finishReason,
+      usage,
+      providerMetadata: toProviderMetadata(piMeta),
+    });
+
+    controller.close();
+    cleanupAbort?.();
+    unsubscribe();
+  }
+
   private async ensureSession(): Promise<AgentSession> {
     if (this.disposed) {
       this.disposed = false; // Reset so a new session can be created
@@ -218,17 +332,7 @@ export class PiLanguageModel implements LanguageModelV3 {
         session.agent.state.systemPrompt = context.systemPrompt;
       }
 
-      let cleanupAbortListener: (() => void) | undefined;
-      if (options.abortSignal) {
-        const onAbort = () => {
-          session.abort().catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
-        };
-        options.abortSignal.addEventListener('abort', onAbort);
-        cleanupAbortListener = () => options.abortSignal?.removeEventListener('abort', onAbort);
-        if (options.abortSignal.aborted) {
-          onAbort();
-        }
-      }
+      const cleanupAbortListener = this.setupAbortHandler(options.abortSignal, session);
 
       let text = '';
       const thinking: string[] = [];
@@ -257,12 +361,10 @@ export class PiLanguageModel implements LanguageModelV3 {
                 break;
               }
               case 'message_end': {
-                if (event.message?.role === 'assistant') {
-                  const msg = event.message as AssistantMessage;
-                  usage = this.extractUsage(msg.usage);
-                  finishReason = mapPiFinishReason(msg.stopReason);
-                  piMeta = { sessionId: this.sessionId, provider: msg.provider, modelId: msg.model, responseModel: msg.responseModel, responseId: msg.responseId };
-                }
+                const endData = this.extractMessageEndData(event);
+                usage = endData.usage;
+                finishReason = endData.finishReason;
+                piMeta = endData.piMeta;
                 break;
               }
               case 'agent_end': {
@@ -301,14 +403,7 @@ export class PiLanguageModel implements LanguageModelV3 {
         });
 
         session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
-          unsubscribe();
-          cleanupAbortListener?.();
-          this.invalidateSession();
-          try {
-            reject(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
-          } catch (mapped) {
-            reject(mapped);
-          }
+          this.handlePromptError(error, unsubscribe, cleanupAbortListener, (mapped) => reject(mapped));
         });
       });
     } catch (error) {
@@ -481,30 +576,25 @@ export class PiLanguageModel implements LanguageModelV3 {
                     activeReasoningPartId = undefined;
                     hasStartedReasoning = false;
                   }
-                  if (event.message?.role === 'assistant') {
-                    const msg = event.message as AssistantMessage;
-                    usage = this.extractUsage(msg.usage);
-                    finishReason = mapPiFinishReason(msg.stopReason);
-                    piMeta = { sessionId: this.sessionId, provider: msg.provider, modelId: msg.model, responseModel: msg.responseModel, responseId: msg.responseId };
-                  }
+                  const endData = this.extractMessageEndData(event);
+                  usage = endData.usage;
+                  finishReason = endData.finishReason;
+                  piMeta = endData.piMeta;
                   break;
                 }
 
                 case 'agent_end': {
-                  if (activeTextPartId) controller.enqueue({ type: 'text-end', id: activeTextPartId });
-                  if (activeReasoningPartId) controller.enqueue({ type: 'reasoning-end', id: activeReasoningPartId });
-                  piMeta.durationMs = Date.now() - startTime;
-
-                  controller.enqueue({
-                    type: 'finish',
+                  this.finalizeStreamParts(
+                    controller,
+                    activeTextPartId,
+                    activeReasoningPartId,
+                    startTime,
+                    piMeta,
                     finishReason,
                     usage,
-                    providerMetadata: toProviderMetadata(piMeta),
-                  });
-
-                  controller.close();
-                  cleanupAbortListener?.();
-                  unsubscribe();
+                    cleanupAbortListener,
+                    unsubscribe
+                  );
                   break;
                 }
 
@@ -524,25 +614,14 @@ export class PiLanguageModel implements LanguageModelV3 {
             }
           });
 
-          if (options.abortSignal) {
-            const onAbort = () => {
-              session.abort().catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
-            };
-            options.abortSignal.addEventListener('abort', onAbort);
-            cleanupAbortListener = () => options.abortSignal?.removeEventListener('abort', onAbort);
-            if (options.abortSignal.aborted) {
-              onAbort();
-            }
-          }
+          cleanupAbortListener = this.setupAbortHandler(options.abortSignal, session);
 
           session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
-            this.logger.error(`Pi session prompt failed: ${error}`);
-            this.invalidateSession();
-            cleanupAbortListener?.();
-            unsubscribe();
-            try {
-              controller.error(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
-            } catch { /* controller may already be closed */ }
+            this.handlePromptError(error, unsubscribe, cleanupAbortListener, (mapped) => {
+              try {
+                controller.error(mapped);
+              } catch { /* controller may already be closed */ }
+            });
           });
         },
 
