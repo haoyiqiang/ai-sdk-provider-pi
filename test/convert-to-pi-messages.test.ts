@@ -228,6 +228,189 @@ describe('convertToPiMessages', () => {
     expect(assistantMsg.role).toBe('assistant');
     expect(warnings).toEqual([]);
   });
+
+  // ── File type support ──
+
+  it('converts file with Uint8Array data and image mediaType', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Analyze this file' },
+          {
+            type: 'file',
+            data: new Uint8Array([1, 2, 3]),
+            mediaType: 'image/png',
+          } as any,
+        ],
+      },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(context.messages).toHaveLength(1);
+    expect(warnings).toEqual([]);
+  });
+
+  it('warns about file with URL data', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Check file' },
+          {
+            type: 'file',
+            data: new URL('https://example.com/file.png'),
+            mediaType: 'image/png',
+          } as any,
+        ],
+      },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain('Image URLs are not supported');
+  });
+
+  it('converts file with base64 string data', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'file',
+            data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk',
+            mediaType: 'image/png',
+          } as any,
+        ],
+      },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(context.messages).toHaveLength(1);
+    expect(warnings).toEqual([]);
+  });
+
+  // ── Tool result edge cases ──
+
+  it('converts tool result with error-json output', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'call_error_json',
+            toolName: 'bash',
+            output: { type: 'error-json', value: { error: 'Something broke', code: 500 } },
+          } as any,
+        ],
+      },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(context.messages).toHaveLength(1);
+    const toolMsg = context.messages[0] as any;
+    expect(toolMsg.isError).toBe(true);
+    expect(warnings).toEqual([]);
+  });
+
+  it('converts tool result with content type output', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'call_content',
+            toolName: 'read',
+            output: {
+              type: 'content',
+              value: [
+                { type: 'text', text: 'File line 1' },
+                { type: 'text', text: 'File line 2' },
+              ],
+            },
+          } as any,
+        ],
+      },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(context.messages).toHaveLength(1);
+    const toolMsg = context.messages[0] as any;
+    expect(toolMsg.role).toBe('toolResult');
+    expect(toolMsg.isError).toBe(false);
+    expect(warnings).toEqual([]);
+  });
+
+  // ── Assistant message edge cases ──
+
+  it('skips assistant message with empty content array', () => {
+    const messages: ModelMessage[] = [
+      { role: 'assistant', content: [] as any },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(context.messages).toHaveLength(0);
+    expect(warnings).toEqual([]);
+  });
+
+  // ── Multiple tool results ──
+
+  it('converts multiple tool results in one tool message', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'call_001',
+            toolName: 'read',
+            output: { type: 'text', value: 'Content A' },
+          } as any,
+          {
+            type: 'tool-result',
+            toolCallId: 'call_002',
+            toolName: 'grep',
+            output: { type: 'text', value: 'Content B' },
+          } as any,
+        ],
+      },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(context.messages).toHaveLength(2);
+    expect(context.messages[0].role).toBe('toolResult');
+    expect(context.messages[1].role).toBe('toolResult');
+    expect(warnings).toEqual([]);
+  });
+
+  // ── Image objects ──
+
+  it('converts user message with image object (not string URL)', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Analyze' },
+          {
+            type: 'image',
+            image: { data: 'base64data', mimeType: 'image/jpeg' } as any,
+          } as any,
+        ],
+      },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(context.messages).toHaveLength(1);
+    expect(warnings).toEqual([]);
+  });
+
+  it('warns about image URL object in image part', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', image: new URL('https://example.com/photo.jpg') } as any,
+        ],
+      },
+    ];
+    const { context, warnings } = convertToPiMessages(messages);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain('Image URLs are not supported');
+  });
 });
 
 describe('buildPromptFromContext', () => {
