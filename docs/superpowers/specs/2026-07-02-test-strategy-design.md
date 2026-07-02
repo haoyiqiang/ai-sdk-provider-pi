@@ -105,21 +105,31 @@ test/integration/
 | `tool-execution.real.test.ts` | `sonnet` | 工具调用能力更强，不易拒答 |
 | `error-recovery.real.test.ts` | `deepseek-v4-flash` | 只测错误路径，不需要强模型 |
 
-### API Key
+### 环境变量与 API Key
 
-集成测试不引入独立的 API key 配置，直接使用 Pi SDK 的标准凭据解析链：
-1. `~/.pi/agent/auth.json` 中的存储
-2. 环境变量 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` 等
+集成测试需要两个条件：`PI_INTEGRATION_TEST=true` 启用 + 对应模型的 API key。
+
+参考 `.env.example`（见项目根目录）：
+
+```env
+# 启用集成测试
+PI_INTEGRATION_TEST=true
+
+# deepseek-v4-flash 使用 DeepSeek API
+DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+
+# sonnet（工具执行）使用 Anthropic API
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key
+```
+
+API key 解析链（Pi SDK 原生支持）：
+1. 环境变量（如上所示）
+2. `~/.pi/agent/auth.json`
 3. 运行时 `authStorage.setRuntimeApiKey()`
-
-用户只需 `pi auth` 配置过即可运行，不需要额外环境变量。
 ### 控制变量
-
 ```typescript
 const runIntegration = process.env.PI_INTEGRATION_TEST === 'true';
 const test = runIntegration ? it : it.skip;
-
-describe.runIf(runIntegration)('doGenerate (real)', () => {
   test('sends prompt and returns text', async () => {
     const model = pi('deepseek-v4-flash');
     // ...
@@ -129,6 +139,7 @@ describe.runIf(runIntegration)('doGenerate (real)', () => {
 
 维持 `PI_INTEGRATION_TEST=true` 的门禁不变。
 
+> 注意：`.env` 文件中的变量会被 Pi SDK 自动读取（它检查 `process.env`），不需要额外加载工具。
 ## 3. 不变更
 
 - 单元测试的数量和断言逻辑不变（只改类型标注）
