@@ -52,6 +52,7 @@
     "prepublishOnly": "npm run clean && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "PI_INTEGRATION_TEST=true vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
