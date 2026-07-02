@@ -7,7 +7,7 @@ const test = runIntegration ? it : it.skip;
 describe.runIf(runIntegration)('Real tool execution', () => {
   test('executes a tool call (read package.json)', async () => {
     const pi = createPi({ cwd: process.cwd() });
-    const model = pi('sonnet'); // sonnet has stronger tool-use ability
+    const model = pi('deepseek-v4-flash');
     try {
       // Ask Pi to use a tool
       const { text } = await model.doGenerate({
@@ -35,7 +35,7 @@ describe.runIf(runIntegration)('Real tool execution', () => {
 
   test('tool call appears in stream', async () => {
     const pi = createPi({ cwd: process.cwd() });
-    const model = pi('sonnet');
+    const model = pi('deepseek-v4-flash');
     try {
       const stream = await model.doStream({
         prompt: [{ role: 'user', content: [{ type: 'text', text: 'Use read tool to read package.json' }] }],

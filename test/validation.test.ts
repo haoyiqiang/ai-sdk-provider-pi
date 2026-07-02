@@ -71,6 +71,26 @@ describe('parseModelId', () => {
     expect(result).toEqual({ provider: 'google', modelId: 'gemini-2.5-flash' });
   });
 
+  it('resolves "deepseek-v4-flash" alias', () => {
+    const result = parseModelId('deepseek-v4-flash');
+    expect(result).toEqual({ provider: 'deepseek', modelId: 'deepseek-v4-flash' });
+  });
+
+  it('resolves "deepseek-v4-pro" alias', () => {
+    const result = parseModelId('deepseek-v4-pro');
+    expect(result).toEqual({ provider: 'deepseek', modelId: 'deepseek-v4-pro' });
+  });
+
+  it('resolves "deepseek-chat" alias (maps to deepseek-v4-flash)', () => {
+    const result = parseModelId('deepseek-chat');
+    expect(result).toEqual({ provider: 'deepseek', modelId: 'deepseek-v4-flash' });
+  });
+
+  it('resolves "deepseek-reasoner" alias (maps to deepseek-v4-pro)', () => {
+    const result = parseModelId('deepseek-reasoner');
+    expect(result).toEqual({ provider: 'deepseek', modelId: 'deepseek-v4-pro' });
+  });
+
   it('aliases are case-insensitive', () => {
     const result = parseModelId('Sonnet');
     expect(result).toEqual({ provider: 'anthropic', modelId: 'claude-sonnet-4' });

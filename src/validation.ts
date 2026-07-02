@@ -41,6 +41,10 @@ export function parseModelId(modelId: string): {
     'o4-mini': { provider: 'openai', modelId: 'o4-mini' },
     'gemini-2.5-pro': { provider: 'google', modelId: 'gemini-2.5-pro' },
     'gemini-2.5-flash': { provider: 'google', modelId: 'gemini-2.5-flash' },
+    'deepseek-v4-flash': { provider: 'deepseek', modelId: 'deepseek-v4-flash' },
+    'deepseek-v4-pro': { provider: 'deepseek', modelId: 'deepseek-v4-pro' },
+    'deepseek-chat': { provider: 'deepseek', modelId: 'deepseek-v4-flash' },
+    'deepseek-reasoner': { provider: 'deepseek', modelId: 'deepseek-v4-pro' },
   };
 
   const alias = aliases[modelId.toLowerCase()];

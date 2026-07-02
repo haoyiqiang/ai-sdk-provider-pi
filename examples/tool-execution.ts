@@ -5,11 +5,14 @@
  *   - Tool execution (Pi reads files, runs commands)
  *   - noTools option (disabling all tools)
  *
- * Usage: npx tsx examples/tool-execution.ts
+ * Usage: cp .env.example .env  # 配置 PI_MODEL_ID 和 API key
+ *        npx tsx examples/tool-execution.ts
  */
-
+import 'dotenv/config';
 import { createPi } from '../src/index.js';
 import { generateText } from 'ai';
+
+const MODEL_ID = process.env.PI_MODEL_ID ?? 'deepseek-v4-flash';
 
 async function main() {
   // ── Part 1: Tool execution ──
@@ -17,7 +20,7 @@ async function main() {
     cwd: process.cwd(),
   });
 
-  const model = pi('sonnet');
+  const model = pi(MODEL_ID);
 
   try {
     console.log('=== Tool Execution Example ===\n');
@@ -57,7 +60,7 @@ async function main() {
   console.log('\n---\n');
 
   const noToolsPi = createPi({ noTools: 'all' });
-  const noToolsModel = noToolsPi('sonnet');
+  const noToolsModel = noToolsPi(MODEL_ID);
 
   try {
     console.log('=== No-Tools Example ===\n');

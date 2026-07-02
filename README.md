@@ -60,12 +60,48 @@ pi('google/gemini-2.5-flash')
 ```
 
 ### Convenience Aliases
-
 ```typescript
-pi('sonnet')  // → anthropic/claude-sonnet-4
-pi('opus')    // → anthropic/claude-opus-4
-pi('haiku')   // → anthropic/claude-haiku-4
-pi('gpt-4o')  // → openai/gpt-4o
+pi('sonnet')              // → anthropic/claude-sonnet-4
+pi('opus')                // → anthropic/claude-opus-4
+pi('haiku')               // → anthropic/claude-haiku-4
+pi('gpt-4o')              // → openai/gpt-4o
+pi('deepseek-v4-flash')   // → deepseek/deepseek-v4-flash
+pi('deepseek-v4-pro')     // → deepseek/deepseek-v4-pro
+pi('deepseek-chat')       // → deepseek/deepseek-v4-flash (alias)
+pi('deepseek-reasoner')   // → deepseek/deepseek-v4-pro (alias)
+```
+
+### Examples Configuration
+
+The examples read model configuration from `.env` via `PI_MODEL_ID`:
+
+```bash
+# .env
+PI_MODEL_ID=deepseek-v4-flash
+DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+```
+
+Run any example with:
+
+```bash
+cp .env.example .env  # 编辑配置
+npx tsx examples/basic-generate.ts
+```
+
+### Examples Configuration
+
+The examples read model configuration from `.env` via `PI_MODEL_ID`:
+
+```bash
+# .env
+PI_MODEL_ID=deepseek-v4-flash
+DEEPSEEK_API_KEY=sk-your-deepseek-api-key
+```
+
+Run any example with:
+```bash
+cp .env.example .env  # 编辑配置
+npx tsx examples/basic-generate.ts
 ```
 
 ## Configuration

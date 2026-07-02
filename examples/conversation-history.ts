@@ -6,15 +6,18 @@
  *   - System prompt across turns
  *   - Manual construction of ModelMessage for history
  *
- * Usage: npx tsx examples/conversation-history.ts
+ * Usage: cp .env.example .env  # 配置 PI_MODEL_ID 和 API key
+ *        npx tsx examples/conversation-history.ts
  */
-
+import 'dotenv/config';
 import { pi } from '../src/index.js';
 import { generateText } from 'ai';
 import type { ModelMessage } from 'ai';
 
+const MODEL_ID = process.env.PI_MODEL_ID ?? 'deepseek-v4-flash';
+
 async function main() {
-  const model = pi('sonnet');
+  const model = pi(MODEL_ID);
 
   try {
     // Turn 1: Establish context

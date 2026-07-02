@@ -2,8 +2,12 @@
  * Error handling example using ai-sdk-provider-pi.
  *
  * Usage: npx tsx examples/error-handling.ts
+ *
+ * Note: This example demonstrates error types and guard functions.
+ * Model-specific error handling (e.g., real API auth failures)
+ * requires a valid API key via .env.
  */
-
+import 'dotenv/config';
 import {
   pi,
   isAuthenticationError,
@@ -13,6 +17,8 @@ import {
 } from '../src/index.js';
 import { generateText } from 'ai';
 import { APICallError, LoadAPIKeyError } from '@ai-sdk/provider';
+
+const MODEL_ID = process.env.PI_MODEL_ID ?? 'deepseek-v4-flash';
 
 async function main() {
   console.log('=== Error Handling Examples ===\n');
@@ -75,6 +81,26 @@ async function main() {
   console.log(`   provider: ${meta?.provider}`);
   console.log(`   modelId: ${meta?.modelId}`);
   console.log(`   sessionId: ${meta?.sessionId}`);
+
+  // Example 5: Real API call with error handling (requires .env config)
+  console.log('\n5. Real API call with error handling:');
+  try {
+    const model = pi(MODEL_ID);
+    const { text, finishReason } = await generateText({
+      model,
+      prompt: '用一句话说你好。',
+    });
+    console.log(`   Success: ${text}`);
+    console.log(`   Finish reason: ${JSON.stringify(finishReason)}`);
+    (model as any).dispose();
+  } catch (error) {
+    console.log(`   Caught: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+    if (isAuthenticationError(error)) {
+      console.log('   → 请检查 .env 中的 API key 配置');
+    } else if (isTimeoutError(error)) {
+      console.log('   → 请求超时，请稍后重试');
+    }
+  }
 }
 
 main();
