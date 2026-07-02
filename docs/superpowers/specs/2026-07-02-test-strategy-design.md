@@ -96,7 +96,23 @@ test/integration/
 **error-recovery.real.test.ts**
 - 无效的 model ID → NoSuchModelError
 - 空的 API key → 认证错误
+### 模型选择
 
+| 文件 | 推荐模型 | 理由 |
+|------|----------|------|
+| `doGenerate.real.test.ts` | `deepseek-v4-flash` | 便宜、快，验证核心流程足够 |
+| `doStream.real.test.ts` | `deepseek-v4-flash` | 同上 |
+| `tool-execution.real.test.ts` | `sonnet` | 工具调用能力更强，不易拒答 |
+| `error-recovery.real.test.ts` | `deepseek-v4-flash` | 只测错误路径，不需要强模型 |
+
+### API Key
+
+集成测试不引入独立的 API key 配置，直接使用 Pi SDK 的标准凭据解析链：
+1. `~/.pi/agent/auth.json` 中的存储
+2. 环境变量 `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` 等
+3. 运行时 `authStorage.setRuntimeApiKey()`
+
+用户只需 `pi auth` 配置过即可运行，不需要额外环境变量。
 ### 控制变量
 
 ```typescript
@@ -105,7 +121,7 @@ const test = runIntegration ? it : it.skip;
 
 describe.runIf(runIntegration)('doGenerate (real)', () => {
   test('sends prompt and returns text', async () => {
-    const model = pi('sonnet');
+    const model = pi('deepseek-v4-flash');
     // ...
   });
 });
