@@ -47,6 +47,16 @@ export type {
   PiProviderMetadata,
   ToolStreamState,
   ParsedModelId,
+  SandboxConfig,
+  /**
+   * Tool operation contracts, re-exported from @earendil-works/pi-coding-agent
+   * so provider consumers share a single source of truth. Use these to build
+   * custom sandbox operations passed via SandboxConfig.operations.
+   */
+  BashOperations,
+  ReadOperations,
+  WriteOperations,
+  EditOperations,
 } from './types.js';
 
 export type { PiErrorMetadata } from './errors.js';

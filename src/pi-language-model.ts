@@ -28,10 +28,27 @@ import {
   validateProviderSettings,
 } from './validation.js';
 
-import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
-import { createAgentSession, SessionManager, AuthStorage, ModelRegistry } from '@earendil-works/pi-coding-agent';
-import type { Model, Api, AssistantMessage, AssistantMessageEvent, Usage as PiUsage } from '@earendil-works/pi-ai';
+import {
+  createAgentSession,
+  SessionManager,
+  AuthStorage,
+  ModelRegistry,
+  createBashToolDefinition,
+  createReadToolDefinition,
+  createWriteToolDefinition,
+  createEditToolDefinition,
+  createLocalBashOperations,
+} from '@earendil-works/pi-coding-agent';
+import type {
+  Model,
+  Api,
+  AssistantMessage,
+  AssistantMessageEvent,
+  Usage as PiUsage,
+} from '@earendil-works/pi-ai';
 import { getModel } from '@earendil-works/pi-ai';
+import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
+import type { SandboxConfig } from './types.js';
 
 /**
  * Converts PiProviderMetadata to AI SDK's SharedV3ProviderMetadata.
@@ -281,17 +298,57 @@ export class PiLanguageModel implements LanguageModelV3 {
       const authStorage = this.providerSettings.authStorage ?? AuthStorage.create();
       const modelRegistry = this.providerSettings.modelRegistry ?? ModelRegistry.create(authStorage);
 
+      // Resolve sandbox config (model-level overrides provider-level).
+      const sandbox: SandboxConfig | undefined =
+        this.settings.sandbox ?? this.providerSettings.sandbox;
+      const baseCwd =
+        sandbox?.cwd ?? this.settings.cwd ?? this.providerSettings.cwd ?? process.cwd();
+
+      // Build custom tool definitions whose execution backing is determined by
+      // the sandbox config. In 'local' mode the agent uses Pi's built-in local
+      // shell/filesystem operations (no override needed). In 'custom' mode each
+      // operation supplied via sandbox.operations replaces the corresponding
+      // built-in tool, with any missing operation falling back to local.
+      //
+      // When a sandbox config is present we replace all four built-in tools so
+      // the entire tool surface shares the same execution backend; otherwise
+      // we leave the built-in tools untouched and only honour provider/model
+      // customTools.
+      const customToolDefs: any[] = [];
+      const hasSandbox = sandbox !== undefined;
+      if (hasSandbox) {
+        const ops = (sandbox?.mode === 'custom' ? sandbox?.operations : undefined) ?? {};
+        customToolDefs.push(
+          createBashToolDefinition(baseCwd, {
+            operations: ops.bash ?? createLocalBashOperations(),
+          }),
+        );
+        if (ops.read) {
+          customToolDefs.push(createReadToolDefinition(baseCwd, { operations: ops.read }));
+        }
+        if (ops.write) {
+          customToolDefs.push(createWriteToolDefinition(baseCwd, { operations: ops.write }));
+        }
+        if (ops.edit) {
+          customToolDefs.push(createEditToolDefinition(baseCwd, { operations: ops.edit }));
+        }
+      }
+
+      const allCustomTools = [
+        ...customToolDefs,
+        ...(this.providerSettings.customTools ?? []),
+      ] as any;
       const result = await createAgentSession({
         model: this.model,
         authStorage,
         modelRegistry,
         sessionManager: this.providerSettings.sessionManager ?? SessionManager.inMemory(),
-        cwd: this.settings.cwd ?? this.providerSettings.cwd,
+        cwd: baseCwd,
         agentDir: this.providerSettings.agentDir,
         tools: this.settings.tools ?? this.providerSettings.tools,
         excludeTools: this.settings.excludeTools ?? this.providerSettings.excludeTools,
-        noTools: this.providerSettings.noTools,
-        customTools: this.providerSettings.customTools as any,
+        noTools: hasSandbox ? 'builtin' : this.providerSettings.noTools,
+        customTools: allCustomTools,
         thinkingLevel: this.settings.thinkingLevel,
       });
 

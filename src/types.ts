@@ -1,7 +1,25 @@
 import type { Model, Api, Provider, ModelThinkingLevel as PiThinkingLevel } from '@earendil-works/pi-ai';
-import type { AuthStorage } from '@earendil-works/pi-coding-agent';
-import type { ModelRegistry } from '@earendil-works/pi-coding-agent';
-import type { SessionManager } from '@earendil-works/pi-coding-agent';
+import type {
+  AuthStorage,
+  ModelRegistry,
+  SessionManager,
+  BashOperations,
+  ReadOperations,
+  WriteOperations,
+  EditOperations,
+} from '@earendil-works/pi-coding-agent';
+
+/**
+ * Tool operations interfaces are re-exported from the upstream Pi Coding Agent
+ * SDK rather than redeclared here, so provider and consumers share a single
+ * source of truth for the sandbox tool execution contracts.
+ */
+export type {
+  BashOperations,
+  ReadOperations,
+  WriteOperations,
+  EditOperations,
+} from '@earendil-works/pi-coding-agent';
 
 /**
  * Model identifier format for Pi provider.
@@ -10,6 +28,42 @@ import type { SessionManager } from '@earendil-works/pi-coding-agent';
  * - Short: "sonnet" (convenience alias)
  */
 export type PiModelId = string;
+
+/**
+ * Sandbox execution configuration.
+ *
+ * Lets consumers choose where the agent's filesystem/bash tools actually run.
+ * - `mode: 'local'` (default) uses Pi's built-in local implementations from
+ *   `@earendil-works/pi-coding-agent` (e.g. `createLocalBashOperations`).
+ * - `mode: 'custom'` uses the operations supplied via `operations`. Any
+ *   operation left undefined falls back to the local default, so consumers
+ *   only need to override the tools they care about (e.g. proxy only `bash`
+ *   to a remote sandbox and keep local `read`/`write`).
+ */
+export interface SandboxConfig {
+  /**
+   * Sandbox backend selection.
+   * - 'local' (default): use Pi's built-in local shell/filesystem operations.
+   * - 'custom': use the operations provided via `operations`, falling back
+   *   to local defaults for any tool not supplied.
+   */
+  mode?: 'local' | 'custom';
+  /**
+   * Working directory for sandboxed tool execution.
+   * Defaults to the model/provider cwd or `process.cwd()`.
+   */
+  cwd?: string;
+  /**
+   * Custom tool operations. Only consulted when `mode === 'custom'`.
+   * Each undefined tool falls back to its local default implementation.
+   */
+  operations?: {
+    bash?: BashOperations;
+    read?: ReadOperations;
+    write?: WriteOperations;
+    edit?: EditOperations;
+  };
+}
 
 /**
  * Settings for the Pi provider factory function.
@@ -65,6 +119,14 @@ export interface PiProviderSettings {
    * Custom tools to register.
    */
   customTools?: unknown[];
+
+  /**
+   * Sandbox execution configuration for the agent's built-in
+   * filesystem/bash tools. Lets tools run locally, in a remote sandbox,
+   * or via custom operations injected by the consumer. Provider-level
+   * default; overridden by model-level `sandbox`.
+   */
+  sandbox?: SandboxConfig;
 
   /**
    * Enable verbose logging for debugging.
@@ -140,6 +202,11 @@ export interface PiLanguageModelSettings {
    * @default 10000
    */
   maxToolResultSize?: number;
+
+  /**
+   * Sandbox execution configuration. Overrides provider-level `sandbox`.
+   */
+  sandbox?: SandboxConfig;
 }
 
 /**
