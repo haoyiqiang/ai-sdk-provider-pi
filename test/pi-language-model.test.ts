@@ -1048,7 +1048,7 @@ describe("PiLanguageModel", () => {
     });
   });
 
-  describe("truncateToolResult", () => {
+  describe("truncateJsonValue", () => {
     it("returns full result when below max size", () => {
       const model = new PiLanguageModel(createModelOptions());
       const result = truncateToolResult("short result", 10_000);
@@ -1073,6 +1073,7 @@ describe("PiLanguageModel", () => {
       expect(result).toContain("[truncated");
     });
   });
+
 
   describe("abort handling in doGenerate", () => {
     let mockSession: ReturnType<typeof createMockSession>;

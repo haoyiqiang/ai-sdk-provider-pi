@@ -38,6 +38,21 @@ export {
  * Maps Pi SDK stopReason values to AI SDK finish reasons.
  */
 export { mapPiFinishReason } from "./map-pi-finish-reason.js";
+
+/**
+ * Tool mapping utilities.
+ * Safe serialization, structured truncation, and Pi-to-AI SDK mapping
+ * for tool calls and tool results.
+ */
+export {
+  DEFAULT_MAX_TOOL_RESULT_SIZE,
+  mapPiToolCall,
+  mapPiToolResult,
+  safeStringify,
+  truncateJsonValue,
+} from "./tool-mapper.js";
+export type { TruncateResult } from "./tool-mapper.js";
+
 /**
  * Language model implementation for Pi.
  * This class implements the AI SDK's LanguageModelV3 interface.

@@ -34,6 +34,11 @@ import {
   convertToPiMessages,
 } from "./convert-to-pi-messages.js";
 import { handlePiError } from "./errors.js";
+import {
+  DEFAULT_MAX_TOOL_RESULT_SIZE,
+  mapPiToolCall,
+  mapPiToolResult,
+} from "./tool-mapper.js";
 import { mapPiFinishReason } from "./map-pi-finish-reason.js";
 import type {
   Logger,
@@ -373,14 +378,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                 } else if (msgEvent.type === "thinking_delta") {
                   thinking.push(msgEvent.delta);
                 } else if (msgEvent.type === "toolcall_end") {
-                  toolCalls.push({
-                    toolCallId: msgEvent.toolCall.id,
-                    toolName: msgEvent.toolCall.name,
-                    input:
-                      typeof msgEvent.toolCall.arguments === "string"
-                        ? msgEvent.toolCall.arguments
-                        : JSON.stringify(msgEvent.toolCall.arguments),
-                  });
+                  toolCalls.push(mapPiToolCall(msgEvent.toolCall));
                 }
                 break;
               }
