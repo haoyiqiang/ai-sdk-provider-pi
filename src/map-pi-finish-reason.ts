@@ -21,7 +21,7 @@ import type { StopReason } from "@earendil-works/pi-ai";
  * ```
  */
 export function mapPiFinishReason(
-  stopReason?: StopReason | string
+  stopReason?: StopReason | string,
 ): LanguageModelV3FinishReason {
   if (stopReason == null) {
     return { unified: "stop", raw: undefined };

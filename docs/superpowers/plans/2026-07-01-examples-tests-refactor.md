@@ -20,9 +20,11 @@
 ### Task 1: Examples — basic-generate.ts
 
 **Files:**
+
 - Create: `examples/basic-generate.ts`
 
 **Interfaces:**
+
 - Consumes: `pi` from `../src/index.js`, `generateText` from `ai`
 - Produces: 独立 CLI 脚本，输出 text、usage、finishReason
 
@@ -35,37 +37,38 @@
  * Usage: npx tsx examples/basic-generate.ts
  */
 
-import { pi } from '../src/index.js';
-import { generateText } from 'ai';
+import { pi } from "../src/index.js";
+import { generateText } from "ai";
 
 async function main() {
-  const model = pi('sonnet');
+  const model = pi("sonnet");
 
   try {
     const { text, usage, finishReason, warnings } = await generateText({
       model,
-      prompt: '用一句话解释什么是量子计算。',
+      prompt: "用一句话解释什么是量子计算。",
     });
 
-    console.log('=== Response ===');
+    console.log("=== Response ===");
     console.log(text);
     console.log();
 
-    console.log('=== Usage ===');
-    console.log(`Input tokens:  ${usage.inputTokens?.total ?? 'N/A'}`);
-    console.log(`Output tokens: ${usage.outputTokens?.total ?? 'N/A'}`);
+    console.log("=== Usage ===");
+    console.log(`Input tokens:  ${usage.inputTokens?.total ?? "N/A"}`);
+    console.log(`Output tokens: ${usage.outputTokens?.total ?? "N/A"}`);
 
     console.log();
-    console.log('=== Finish Reason ===');
+    console.log("=== Finish Reason ===");
     console.log(JSON.stringify(finishReason, null, 2));
 
     if (warnings.length > 0) {
       console.log();
-      console.log('=== Warnings ===');
-      for (const w of warnings) console.log(`  - ${w.type}: ${w.message ?? w.details}`);
+      console.log("=== Warnings ===");
+      for (const w of warnings)
+        console.log(`  - ${w.type}: ${w.message ?? w.details}`);
     }
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
   } finally {
     model.dispose();
   }
@@ -94,9 +97,11 @@ git commit -m "feat(examples): add basic-generate CLI example"
 ### Task 2: Examples — basic-stream.ts
 
 **Files:**
+
 - Create: `examples/basic-stream.ts`
 
 **Interfaces:**
+
 - Consumes: `pi` from `../src/index.js`, `streamText` from `ai`
 - Produces: 流式输出 CLI 脚本
 
@@ -109,36 +114,36 @@ git commit -m "feat(examples): add basic-generate CLI example"
  * Usage: npx tsx examples/basic-stream.ts
  */
 
-import { pi } from '../src/index.js';
-import { streamText } from 'ai';
+import { pi } from "../src/index.js";
+import { streamText } from "ai";
 
 async function main() {
-  const model = pi('sonnet');
+  const model = pi("sonnet");
 
   try {
     const result = streamText({
       model,
-      prompt: '写一首关于编程的简短俳句。',
+      prompt: "写一首关于编程的简短俳句。",
     });
 
-    console.log('=== Streaming Response ===');
+    console.log("=== Streaming Response ===");
 
     // Stream text deltas
     for await (const chunk of result.textStream) {
       process.stdout.write(chunk);
     }
-    console.log('\n');
+    console.log("\n");
 
     // Get final metadata
     const { usage, finishReason } = await result;
-    console.log('=== Usage ===');
-    console.log(`Input tokens:  ${usage.inputTokens?.total ?? 'N/A'}`);
-    console.log(`Output tokens: ${usage.outputTokens?.total ?? 'N/A'}`);
+    console.log("=== Usage ===");
+    console.log(`Input tokens:  ${usage.inputTokens?.total ?? "N/A"}`);
+    console.log(`Output tokens: ${usage.outputTokens?.total ?? "N/A"}`);
     console.log();
-    console.log('=== Finish Reason ===');
+    console.log("=== Finish Reason ===");
     console.log(JSON.stringify(finishReason, null, 2));
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
   } finally {
     model.dispose();
   }
@@ -159,9 +164,11 @@ git commit -m "feat(examples): add basic-stream CLI example"
 ### Task 3: Examples — tool-execution.ts
 
 **Files:**
+
 - Create: `examples/tool-execution.ts`
 
 **Interfaces:**
+
 - Consumes: `createPi` from `../src/index.js`, `generateText` from `ai`
 - Produces: 工具执行示例
 
@@ -174,8 +181,8 @@ git commit -m "feat(examples): add basic-stream CLI example"
  * Usage: npx tsx examples/tool-execution.ts
  */
 
-import { createPi } from '../src/index.js';
-import { generateText } from 'ai';
+import { createPi } from "../src/index.js";
+import { generateText } from "ai";
 
 async function main() {
   // Create a provider with working directory for tool execution
@@ -183,47 +190,48 @@ async function main() {
     cwd: process.cwd(),
   });
 
-  const model = pi('sonnet');
+  const model = pi("sonnet");
 
   try {
-    console.log('=== Tool Execution Example ===\n');
-    console.log('Asking Pi to read package.json...\n');
+    console.log("=== Tool Execution Example ===\n");
+    console.log("Asking Pi to read package.json...\n");
 
     const { text, finishReason } = await generateText({
       model,
-      prompt: '使用 read 工具读取当前目录的 package.json 文件，然后告诉我这个项目的名称和版本号。',
+      prompt:
+        "使用 read 工具读取当前目录的 package.json 文件，然后告诉我这个项目的名称和版本号。",
     });
 
-    console.log('=== Response ===');
+    console.log("=== Response ===");
     console.log(text);
     console.log();
-    console.log('=== Finish Reason ===');
+    console.log("=== Finish Reason ===");
     console.log(JSON.stringify(finishReason, null, 2));
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
   } finally {
     model.dispose();
   }
 
   // Example with tools disabled
-  console.log('\n---\n');
+  console.log("\n---\n");
 
-  const noToolsPi = createPi({ noTools: 'all' });
-  const noToolsModel = noToolsPi('sonnet');
+  const noToolsPi = createPi({ noTools: "all" });
+  const noToolsModel = noToolsPi("sonnet");
 
   try {
-    console.log('=== No-Tools Example ===\n');
-    console.log('Asking Pi without tools...\n');
+    console.log("=== No-Tools Example ===\n");
+    console.log("Asking Pi without tools...\n");
 
     const { text } = await generateText({
       model: noToolsModel,
-      prompt: '用一句话解释什么是 DevOps。',
+      prompt: "用一句话解释什么是 DevOps。",
     });
 
-    console.log('=== Response ===');
+    console.log("=== Response ===");
     console.log(text);
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
   } finally {
     noToolsModel.dispose();
   }
@@ -244,9 +252,11 @@ git commit -m "feat(examples): add tool-execution CLI example"
 ### Task 4: Examples — custom-provider.ts
 
 **Files:**
+
 - Create: `examples/custom-provider.ts`
 
 **Interfaces:**
+
 - Consumes: `createPi` from `../src/index.js`, `AuthStorage` from `@earendil-works/pi-coding-agent`, `generateText` from `ai`
 - Produces: 自定义 provider 示例
 
@@ -259,9 +269,9 @@ git commit -m "feat(examples): add tool-execution CLI example"
  * Usage: npx tsx examples/custom-provider.ts
  */
 
-import { createPi } from '../src/index.js';
-import { AuthStorage } from '@earendil-works/pi-coding-agent';
-import { generateText } from 'ai';
+import { createPi } from "../src/index.js";
+import { AuthStorage } from "@earendil-works/pi-coding-agent";
+import { generateText } from "ai";
 
 async function main() {
   // Custom provider with explicit AuthStorage
@@ -278,47 +288,55 @@ async function main() {
   });
 
   // Try a Claude model
-  const claudeModel = pi('anthropic/claude-haiku-4');
+  const claudeModel = pi("anthropic/claude-haiku-4");
 
   try {
-    console.log('=== Claude Haiku ===\n');
+    console.log("=== Claude Haiku ===\n");
 
     const { text, usage, providerMetadata } = await generateText({
       model: claudeModel,
-      prompt: '用一句话介绍你自己。',
+      prompt: "用一句话介绍你自己。",
     });
 
     console.log(text);
     console.log();
-    console.log(`Tokens: in=${usage.inputTokens?.total}, out=${usage.outputTokens?.total}`);
+    console.log(
+      `Tokens: in=${usage.inputTokens?.total}, out=${usage.outputTokens?.total}`,
+    );
     if (providerMetadata) {
-      console.log(`Provider: ${(providerMetadata as any).provider?.value ?? 'N/A'}`);
-      console.log(`Model: ${(providerMetadata as any).responseModel?.value ?? 'N/A'}`);
+      console.log(
+        `Provider: ${(providerMetadata as any).provider?.value ?? "N/A"}`,
+      );
+      console.log(
+        `Model: ${(providerMetadata as any).responseModel?.value ?? "N/A"}`,
+      );
     }
   } catch (error) {
-    console.error('Claude model error:', error);
+    console.error("Claude model error:", error);
   } finally {
     claudeModel.dispose();
   }
 
   // Try switching to a different model
-  console.log('\n---\n');
+  console.log("\n---\n");
 
-  const openaiModel = pi('gpt-4o');
+  const openaiModel = pi("gpt-4o");
 
   try {
-    console.log('=== GPT-4o ===\n');
+    console.log("=== GPT-4o ===\n");
 
     const { text, usage } = await generateText({
       model: openaiModel,
-      prompt: '用一句话介绍你自己。',
+      prompt: "用一句话介绍你自己。",
     });
 
     console.log(text);
     console.log();
-    console.log(`Tokens: in=${usage.inputTokens?.total}, out=${usage.outputTokens?.total}`);
+    console.log(
+      `Tokens: in=${usage.inputTokens?.total}, out=${usage.outputTokens?.total}`,
+    );
   } catch (error) {
-    console.error('OpenAI model error:', error);
+    console.error("OpenAI model error:", error);
   } finally {
     openaiModel.dispose();
   }
@@ -339,9 +357,11 @@ git commit -m "feat(examples): add custom-provider CLI example"
 ### Task 5: Examples — error-handling.ts
 
 **Files:**
+
 - Create: `examples/error-handling.ts`
 
 **Interfaces:**
+
 - Consumes: `pi`, `isAuthenticationError`, `isTimeoutError`, `isContextOverflowError`, `getErrorMetadata` from `../src/index.js`, `generateText` from `ai`
 - Produces: 错误处理示例
 
@@ -360,64 +380,74 @@ import {
   isTimeoutError,
   isContextOverflowError,
   getErrorMetadata,
-} from '../src/index.js';
-import { generateText } from 'ai';
-import { APICallError, LoadAPIKeyError } from '@ai-sdk/provider';
+} from "../src/index.js";
+import { generateText } from "ai";
+import { APICallError, LoadAPIKeyError } from "@ai-sdk/provider";
 
 async function main() {
-  console.log('=== Error Handling Examples ===\n');
+  console.log("=== Error Handling Examples ===\n");
 
   // Example 1: Invalid model ID
-  console.log('1. Invalid model ID:');
+  console.log("1. Invalid model ID:");
   try {
-    const model = pi('invalid-provider/nonexistent-model');
-    await generateText({ model, prompt: 'Hello' });
+    const model = pi("invalid-provider/nonexistent-model");
+    await generateText({ model, prompt: "Hello" });
   } catch (error) {
-    console.log(`   Caught: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+    console.log(
+      `   Caught: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`,
+    );
   }
 
   // Example 2: Empty model ID
-  console.log('\n2. Empty model ID:');
+  console.log("\n2. Empty model ID:");
   try {
-    pi('');
+    pi("");
   } catch (error) {
-    console.log(`   Caught: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`);
+    console.log(
+      `   Caught: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`,
+    );
   }
 
   // Example 3: Using error type guards
-  console.log('\n3. Error type guards demo:');
-  const fakeAuthError = new LoadAPIKeyError({ message: 'API key not found' });
+  console.log("\n3. Error type guards demo:");
+  const fakeAuthError = new LoadAPIKeyError({ message: "API key not found" });
   const fakeTimeoutError = new APICallError({
-    message: 'Timeout',
-    url: 'pi://test',
+    message: "Timeout",
+    url: "pi://test",
     requestBodyValues: {},
     isRetryable: true,
-    data: { code: 'TIMEOUT' },
+    data: { code: "TIMEOUT" },
   });
   const fakeContextError = new APICallError({
-    message: 'Context overflow',
-    url: 'pi://test',
+    message: "Context overflow",
+    url: "pi://test",
     requestBodyValues: {},
     isRetryable: false,
-    data: { code: 'CONTEXT_OVERFLOW' },
+    data: { code: "CONTEXT_OVERFLOW" },
   });
 
-  console.log(`   isAuthenticationError(fakeAuthError): ${isAuthenticationError(fakeAuthError)}`);
-  console.log(`   isTimeoutError(fakeTimeoutError): ${isTimeoutError(fakeTimeoutError)}`);
-  console.log(`   isContextOverflowError(fakeContextError): ${isContextOverflowError(fakeContextError)}`);
+  console.log(
+    `   isAuthenticationError(fakeAuthError): ${isAuthenticationError(fakeAuthError)}`,
+  );
+  console.log(
+    `   isTimeoutError(fakeTimeoutError): ${isTimeoutError(fakeTimeoutError)}`,
+  );
+  console.log(
+    `   isContextOverflowError(fakeContextError): ${isContextOverflowError(fakeContextError)}`,
+  );
 
   // Example 4: Extract error metadata
-  console.log('\n4. Error metadata extraction:');
+  console.log("\n4. Error metadata extraction:");
   const errorWithMeta = new APICallError({
-    message: 'Something failed',
-    url: 'pi://anthropic/claude-sonnet-4',
+    message: "Something failed",
+    url: "pi://anthropic/claude-sonnet-4",
     requestBodyValues: {},
     isRetryable: false,
     data: {
-      code: 'CUSTOM_ERROR',
-      provider: 'anthropic',
-      modelId: 'claude-sonnet-4',
-      sessionId: 'sess_abc123',
+      code: "CUSTOM_ERROR",
+      provider: "anthropic",
+      modelId: "claude-sonnet-4",
+      sessionId: "sess_abc123",
     },
   });
   const meta = getErrorMetadata(errorWithMeta);
@@ -442,9 +472,11 @@ git commit -m "feat(examples): add error-handling CLI example"
 ### Task 6: Examples — conversation-history.ts
 
 **Files:**
+
 - Create: `examples/conversation-history.ts`
 
 **Interfaces:**
+
 - Consumes: `pi` from `../src/index.js`, `generateText` from `ai`, `ModelMessage` from `ai`
 - Produces: 多轮对话示例
 
@@ -457,48 +489,50 @@ git commit -m "feat(examples): add error-handling CLI example"
  * Usage: npx tsx examples/conversation-history.ts
  */
 
-import { pi } from '../src/index.js';
-import { generateText } from 'ai';
-import type { ModelMessage } from 'ai';
+import { pi } from "../src/index.js";
+import { generateText } from "ai";
+import type { ModelMessage } from "ai";
 
 async function main() {
-  const model = pi('sonnet');
+  const model = pi("sonnet");
 
   try {
     // Turn 1: Establish context
-    console.log('=== Multi-Turn Conversation ===\n');
+    console.log("=== Multi-Turn Conversation ===\n");
 
     const turn1Result = await generateText({
       model,
       messages: [
         {
-          role: 'system',
-          content: '你是一个友好的助手。请用简洁的中文回答。',
+          role: "system",
+          content: "你是一个友好的助手。请用简洁的中文回答。",
         },
         {
-          role: 'user',
-          content: [{ type: 'text', text: '我的名字是张三。' }],
+          role: "user",
+          content: [{ type: "text", text: "我的名字是张三。" }],
         },
       ],
     });
 
     const assistantReply = turn1Result.content
-      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-      .map(c => c.text)
-      .join('');
+      .filter((c): c is { type: "text"; text: string } => c.type === "text")
+      .map((c) => c.text)
+      .join("");
 
-    console.log('Turn 1:');
+    console.log("Turn 1:");
     console.log(`  User: 我的名字是张三。`);
     console.log(`  Assistant: ${assistantReply}`);
-    console.log(`  Tokens: in=${turn1Result.usage.inputTokens?.total}, out=${turn1Result.usage.outputTokens?.total}`);
+    console.log(
+      `  Tokens: in=${turn1Result.usage.inputTokens?.total}, out=${turn1Result.usage.outputTokens?.total}`,
+    );
     console.log();
 
     // Turn 2: Follow-up (session is reused automatically)
     const messages: ModelMessage[] = [
-      { role: 'system', content: '你是一个友好的助手。请用简洁的中文回答。' },
-      { role: 'user', content: '我的名字是张三。' },
-      { role: 'assistant', content: assistantReply },
-      { role: 'user', content: '你还记得我的名字吗？' },
+      { role: "system", content: "你是一个友好的助手。请用简洁的中文回答。" },
+      { role: "user", content: "我的名字是张三。" },
+      { role: "assistant", content: assistantReply },
+      { role: "user", content: "你还记得我的名字吗？" },
     ];
 
     const turn2Result = await generateText({
@@ -507,16 +541,18 @@ async function main() {
     });
 
     const reply2 = turn2Result.content
-      .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-      .map(c => c.text)
-      .join('');
+      .filter((c): c is { type: "text"; text: string } => c.type === "text")
+      .map((c) => c.text)
+      .join("");
 
-    console.log('Turn 2:');
+    console.log("Turn 2:");
     console.log(`  User: 你还记得我的名字吗？`);
     console.log(`  Assistant: ${reply2}`);
-    console.log(`  Tokens: in=${turn2Result.usage.inputTokens?.total}, out=${turn2Result.usage.outputTokens?.total}`);
+    console.log(
+      `  Tokens: in=${turn2Result.usage.inputTokens?.total}, out=${turn2Result.usage.outputTokens?.total}`,
+    );
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
   } finally {
     model.dispose();
   }
@@ -537,9 +573,11 @@ git commit -m "feat(examples): add conversation-history CLI example"
 ### Task 7: Refactoring — Extract helpers in PiLanguageModel
 
 **Files:**
+
 - Modify: `src/pi-language-model.ts`
 
 **Interfaces:**
+
 - Consumes: 现有的 doGenerate/doStream 中的事件处理逻辑
 - Produces: 4 个私有方法：`#extractMessageEndData`, `#setupAbortHandler`, `#handlePromptError`, `#finalizeStreamParts`
 
@@ -700,23 +738,29 @@ Run: `cat src/pi-language-model.ts | head -n 35` to verify imports.
 将 doGenerate 中的以下代码（当前 ~L221-231）：
 
 ```typescript
-      let cleanupAbortListener: (() => void) | undefined;
-      if (options.abortSignal) {
-        const onAbort = () => {
-          session.abort().catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
-        };
-        options.abortSignal.addEventListener('abort', onAbort);
-        cleanupAbortListener = () => options.abortSignal?.removeEventListener('abort', onAbort);
-        if (options.abortSignal.aborted) {
-          onAbort();
-        }
-      }
+let cleanupAbortListener: (() => void) | undefined;
+if (options.abortSignal) {
+  const onAbort = () => {
+    session
+      .abort()
+      .catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
+  };
+  options.abortSignal.addEventListener("abort", onAbort);
+  cleanupAbortListener = () =>
+    options.abortSignal?.removeEventListener("abort", onAbort);
+  if (options.abortSignal.aborted) {
+    onAbort();
+  }
+}
 ```
 
 替换为：
 
 ```typescript
-      const cleanupAbortListener = this.setupAbortHandler(options.abortSignal, session);
+const cleanupAbortListener = this.setupAbortHandler(
+  options.abortSignal,
+  session,
+);
 ```
 
 - [ ] **Step 5: 重构 doGenerate — 替换 prompt error 处理**
@@ -724,24 +768,36 @@ Run: `cat src/pi-language-model.ts | head -n 35` to verify imports.
 将 doGenerate 中的以下代码（当前 ~L303-312）：
 
 ```typescript
-      session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
-          unsubscribe();
-          cleanupAbortListener?.();
-          this.invalidateSession();
-          try {
-            reject(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
-          } catch (mapped) {
-            reject(mapped);
-          }
-        });
+session
+  .prompt(promptText, { expandPromptTemplates: false })
+  .catch((error: unknown) => {
+    unsubscribe();
+    cleanupAbortListener?.();
+    this.invalidateSession();
+    try {
+      reject(
+        handlePiError(error, {
+          provider: this.model.provider,
+          modelId: this.model.id,
+          sessionId: this.sessionId,
+        }),
+      );
+    } catch (mapped) {
+      reject(mapped);
+    }
+  });
 ```
 
 替换为：
 
 ```typescript
-      session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
-        this.handlePromptError(error, unsubscribe, cleanupAbortListener, (mapped) => reject(mapped));
-      });
+session
+  .prompt(promptText, { expandPromptTemplates: false })
+  .catch((error: unknown) => {
+    this.handlePromptError(error, unsubscribe, cleanupAbortListener, (mapped) =>
+      reject(mapped),
+    );
+  });
 ```
 
 - [ ] **Step 6: 重构 doStream — 替换 abort 设置**
@@ -749,22 +805,25 @@ Run: `cat src/pi-language-model.ts | head -n 35` to verify imports.
 将 doStream 中的以下代码（当前 ~L527-536）：
 
 ```typescript
-          if (options.abortSignal) {
-            const onAbort = () => {
-              session.abort().catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
-            };
-            options.abortSignal.addEventListener('abort', onAbort);
-            cleanupAbortListener = () => options.abortSignal?.removeEventListener('abort', onAbort);
-            if (options.abortSignal.aborted) {
-              onAbort();
-            }
-          }
+if (options.abortSignal) {
+  const onAbort = () => {
+    session
+      .abort()
+      .catch((err: unknown) => this.logger.error(`Abort error: ${err}`));
+  };
+  options.abortSignal.addEventListener("abort", onAbort);
+  cleanupAbortListener = () =>
+    options.abortSignal?.removeEventListener("abort", onAbort);
+  if (options.abortSignal.aborted) {
+    onAbort();
+  }
+}
 ```
 
 替换为：
 
 ```typescript
-          cleanupAbortListener = this.setupAbortHandler(options.abortSignal, session);
+cleanupAbortListener = this.setupAbortHandler(options.abortSignal, session);
 ```
 
 - [ ] **Step 7: 重构 doStream — 替换 message_end 处理**
@@ -863,27 +922,46 @@ Run: `cat src/pi-language-model.ts | head -n 35` to verify imports.
 将 doStream 中的以下代码（当前 ~L538-546）：
 
 ```typescript
-          session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
-            this.logger.error(`Pi session prompt failed: ${error}`);
-            this.invalidateSession();
-            cleanupAbortListener?.();
-            unsubscribe();
-            try {
-              controller.error(handlePiError(error, { provider: this.model.provider, modelId: this.model.id, sessionId: this.sessionId }));
-            } catch { /* controller may already be closed */ }
-          });
+session
+  .prompt(promptText, { expandPromptTemplates: false })
+  .catch((error: unknown) => {
+    this.logger.error(`Pi session prompt failed: ${error}`);
+    this.invalidateSession();
+    cleanupAbortListener?.();
+    unsubscribe();
+    try {
+      controller.error(
+        handlePiError(error, {
+          provider: this.model.provider,
+          modelId: this.model.id,
+          sessionId: this.sessionId,
+        }),
+      );
+    } catch {
+      /* controller may already be closed */
+    }
+  });
 ```
 
 替换为：
 
 ```typescript
-          session.prompt(promptText, { expandPromptTemplates: false }).catch((error: unknown) => {
-            this.handlePromptError(error, unsubscribe, cleanupAbortListener, (mapped) => {
-              try {
-                controller.error(mapped);
-              } catch { /* controller may already be closed */ }
-            });
-          });
+session
+  .prompt(promptText, { expandPromptTemplates: false })
+  .catch((error: unknown) => {
+    this.handlePromptError(
+      error,
+      unsubscribe,
+      cleanupAbortListener,
+      (mapped) => {
+        try {
+          controller.error(mapped);
+        } catch {
+          /* controller may already be closed */
+        }
+      },
+    );
+  });
 ```
 
 - [ ] **Step 10: 运行全部测试确认无回归**
@@ -919,84 +997,90 @@ git commit -m "refactor: extract 4 shared helpers from doGenerate/doStream
 ### Task 8: Tests — New pi-provider.test.ts
 
 **Files:**
+
 - Create: `test/pi-provider.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createPi`, `pi` from `../src/pi-provider.js`
 - Produces: 完整测试覆盖 createPi 工厂函数
 
 - [ ] **Step 1: 创建测试文件**
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-import { createPi, pi } from '../src/pi-provider.js';
-import { PiLanguageModel } from '../src/pi-language-model.js';
-import { NoSuchModelError } from '@ai-sdk/provider';
+import { describe, it, expect } from "vitest";
+import { createPi, pi } from "../src/pi-provider.js";
+import { PiLanguageModel } from "../src/pi-language-model.js";
+import { NoSuchModelError } from "@ai-sdk/provider";
 
-describe('createPi', () => {
-  describe('provider callable', () => {
-    it('returns a PiLanguageModel when called with a valid model ID', () => {
+describe("createPi", () => {
+  describe("provider callable", () => {
+    it("returns a PiLanguageModel when called with a valid model ID", () => {
       const provider = createPi();
-      const model = provider('sonnet');
+      const model = provider("sonnet");
       expect(model).toBeInstanceOf(PiLanguageModel);
-      expect(model.modelId).toBe('sonnet');
-      expect(model.provider).toBe('pi');
+      expect(model.modelId).toBe("sonnet");
+      expect(model.provider).toBe("pi");
     });
 
-    it('throws NoSuchModelError for invalid model ID', () => {
+    it("throws NoSuchModelError for invalid model ID", () => {
       const provider = createPi();
-      expect(() => provider('nonexistent/unknown-model-12345')).toThrow(NoSuchModelError);
+      expect(() => provider("nonexistent/unknown-model-12345")).toThrow(
+        NoSuchModelError,
+      );
     });
 
-    it('throws for empty string model ID', () => {
+    it("throws for empty string model ID", () => {
       const provider = createPi();
-      expect(() => provider('')).toThrow();
+      expect(() => provider("")).toThrow();
     });
   });
 
-  describe('provider properties', () => {
-    it('has specificationVersion v3', () => {
+  describe("provider properties", () => {
+    it("has specificationVersion v3", () => {
       const provider = createPi();
-      expect(provider.specificationVersion).toBe('v3');
+      expect(provider.specificationVersion).toBe("v3");
     });
 
-    it('languageModel() creates a PiLanguageModel', () => {
+    it("languageModel() creates a PiLanguageModel", () => {
       const provider = createPi();
-      const model = provider.languageModel('sonnet');
+      const model = provider.languageModel("sonnet");
       expect(model).toBeInstanceOf(PiLanguageModel);
     });
 
-    it('chat() creates a PiLanguageModel (alias for languageModel)', () => {
+    it("chat() creates a PiLanguageModel (alias for languageModel)", () => {
       const provider = createPi();
-      const model = provider.chat('haiku');
+      const model = provider.chat("haiku");
       expect(model).toBeInstanceOf(PiLanguageModel);
-      expect(model.modelId).toBe('haiku');
+      expect(model.modelId).toBe("haiku");
     });
 
-    it('embeddingModel() throws NoSuchModelError', () => {
+    it("embeddingModel() throws NoSuchModelError", () => {
       const provider = createPi();
-      expect(() => provider.embeddingModel('any-model')).toThrow(NoSuchModelError);
+      expect(() => provider.embeddingModel("any-model")).toThrow(
+        NoSuchModelError,
+      );
       try {
-        provider.embeddingModel('any-model');
+        provider.embeddingModel("any-model");
         expect.unreachable();
       } catch (e) {
         if (e instanceof NoSuchModelError) {
-          expect(e.data?.modelType).toBe('embeddingModel');
+          expect(e.data?.modelType).toBe("embeddingModel");
         } else {
           throw e;
         }
       }
     });
 
-    it('imageModel() throws NoSuchModelError', () => {
+    it("imageModel() throws NoSuchModelError", () => {
       const provider = createPi();
-      expect(() => provider.imageModel('any-model')).toThrow(NoSuchModelError);
+      expect(() => provider.imageModel("any-model")).toThrow(NoSuchModelError);
       try {
-        provider.imageModel('any-model');
+        provider.imageModel("any-model");
         expect.unreachable();
       } catch (e) {
         if (e instanceof NoSuchModelError) {
-          expect(e.data?.modelType).toBe('imageModel');
+          expect(e.data?.modelType).toBe("imageModel");
         } else {
           throw e;
         }
@@ -1004,49 +1088,51 @@ describe('createPi', () => {
     });
   });
 
-  describe('provider settings merging', () => {
-    it('uses model-level cwd over provider-level cwd', () => {
-      const provider = createPi({ cwd: '/provider/cwd' });
-      const model = provider('sonnet', { cwd: '/model/cwd' }) as PiLanguageModel;
+  describe("provider settings merging", () => {
+    it("uses model-level cwd over provider-level cwd", () => {
+      const provider = createPi({ cwd: "/provider/cwd" });
+      const model = provider("sonnet", {
+        cwd: "/model/cwd",
+      }) as PiLanguageModel;
       // We can't directly inspect internal settings, but model should be created
       expect(model).toBeDefined();
-      expect(model.modelId).toBe('sonnet');
+      expect(model.modelId).toBe("sonnet");
     });
 
-    it('accepts provider-level cwd as fallback', () => {
-      const provider = createPi({ cwd: '/provider/cwd' });
-      const model = provider('sonnet') as PiLanguageModel;
+    it("accepts provider-level cwd as fallback", () => {
+      const provider = createPi({ cwd: "/provider/cwd" });
+      const model = provider("sonnet") as PiLanguageModel;
       expect(model).toBeDefined();
     });
   });
 
-  describe('cannot be called with new', () => {
-    it('throws when called as constructor', () => {
+  describe("cannot be called with new", () => {
+    it("throws when called as constructor", () => {
       const provider = createPi();
       expect(() => {
         // @ts-expect-error testing runtime behavior
-        new provider('sonnet');
-      }).toThrow('cannot be called with the new keyword');
+        new provider("sonnet");
+      }).toThrow("cannot be called with the new keyword");
     });
   });
 });
 
-describe('default pi instance', () => {
-  it('is a valid provider', () => {
+describe("default pi instance", () => {
+  it("is a valid provider", () => {
     expect(pi).toBeDefined();
-    expect(typeof pi).toBe('function');
+    expect(typeof pi).toBe("function");
   });
 
-  it('has languageModel method', () => {
-    expect(typeof pi.languageModel).toBe('function');
+  it("has languageModel method", () => {
+    expect(typeof pi.languageModel).toBe("function");
   });
 
-  it('has chat method', () => {
-    expect(typeof pi.chat).toBe('function');
+  it("has chat method", () => {
+    expect(typeof pi.chat).toBe("function");
   });
 
-  it('can create a model with valid alias', () => {
-    const model = pi('sonnet');
+  it("can create a model with valid alias", () => {
+    const model = pi("sonnet");
     expect(model).toBeInstanceOf(PiLanguageModel);
   });
 });
@@ -1072,9 +1158,11 @@ git commit -m "test: add pi-provider.test.ts for createPi factory coverage"
 ### Task 9: Tests — Supplement convert-to-pi-messages.test.ts
 
 **Files:**
+
 - Modify: `test/convert-to-pi-messages.test.ts`
 
 **Interfaces:**
+
 - Consumes: 现有测试文件
 - Produces: 追加 9 个测试覆盖 file 类型、error-json/content 输出、空 assistant、多 tool-result、image 对象
 
@@ -1083,188 +1171,192 @@ git commit -m "test: add pi-provider.test.ts for createPi factory coverage"
 在 `test/convert-to-pi-messages.test.ts` 中，在 `it('converts assistant message with reasoning', ...)` 测试之后、`});` 关闭 describe('convertToPiMessages', ...) 之前，追加以下测试：
 
 ```typescript
-  // ── File type support ──
+// ── File type support ──
 
-  it('converts file with Uint8Array data and image mediaType', () => {
-    const messages: ModelMessage[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Analyze this file' },
-          {
-            type: 'file',
-            data: new Uint8Array([1, 2, 3]),
-            mediaType: 'image/png',
-          } as any,
-        ],
-      },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(context.messages).toHaveLength(1);
-    expect(warnings).toEqual([]);
-  });
+it("converts file with Uint8Array data and image mediaType", () => {
+  const messages: ModelMessage[] = [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Analyze this file" },
+        {
+          type: "file",
+          data: new Uint8Array([1, 2, 3]),
+          mediaType: "image/png",
+        } as any,
+      ],
+    },
+  ];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(context.messages).toHaveLength(1);
+  expect(warnings).toEqual([]);
+});
 
-  it('warns about file with URL data', () => {
-    const messages: ModelMessage[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Check file' },
-          {
-            type: 'file',
-            data: new URL('https://example.com/file.png'),
-            mediaType: 'image/png',
-          } as any,
-        ],
-      },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(warnings.length).toBeGreaterThan(0);
-    expect(warnings[0]).toContain('Image URLs are not supported');
-  });
+it("warns about file with URL data", () => {
+  const messages: ModelMessage[] = [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Check file" },
+        {
+          type: "file",
+          data: new URL("https://example.com/file.png"),
+          mediaType: "image/png",
+        } as any,
+      ],
+    },
+  ];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(warnings.length).toBeGreaterThan(0);
+  expect(warnings[0]).toContain("Image URLs are not supported");
+});
 
-  it('converts file with base64 string data', () => {
-    const messages: ModelMessage[] = [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'file',
-            data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk',
-            mediaType: 'image/png',
-          } as any,
-        ],
-      },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(context.messages).toHaveLength(1);
-    expect(warnings).toEqual([]);
-  });
+it("converts file with base64 string data", () => {
+  const messages: ModelMessage[] = [
+    {
+      role: "user",
+      content: [
+        {
+          type: "file",
+          data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk",
+          mediaType: "image/png",
+        } as any,
+      ],
+    },
+  ];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(context.messages).toHaveLength(1);
+  expect(warnings).toEqual([]);
+});
 
-  // ── Tool result edge cases ──
+// ── Tool result edge cases ──
 
-  it('converts tool result with error-json output', () => {
-    const messages: ModelMessage[] = [
-      {
-        role: 'tool',
-        content: [
-          {
-            type: 'tool-result',
-            toolCallId: 'call_error_json',
-            toolName: 'bash',
-            output: { type: 'error-json', value: { error: 'Something broke', code: 500 } },
-          } as any,
-        ],
-      },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(context.messages).toHaveLength(1);
-    const toolMsg = context.messages[0] as any;
-    expect(toolMsg.isError).toBe(true);
-    expect(warnings).toEqual([]);
-  });
+it("converts tool result with error-json output", () => {
+  const messages: ModelMessage[] = [
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "call_error_json",
+          toolName: "bash",
+          output: {
+            type: "error-json",
+            value: { error: "Something broke", code: 500 },
+          },
+        } as any,
+      ],
+    },
+  ];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(context.messages).toHaveLength(1);
+  const toolMsg = context.messages[0] as any;
+  expect(toolMsg.isError).toBe(true);
+  expect(warnings).toEqual([]);
+});
 
-  it('converts tool result with content type output', () => {
-    const messages: ModelMessage[] = [
-      {
-        role: 'tool',
-        content: [
-          {
-            type: 'tool-result',
-            toolCallId: 'call_content',
-            toolName: 'read',
-            output: {
-              type: 'content',
-              value: [
-                { type: 'text', text: 'File line 1' },
-                { type: 'text', text: 'File line 2' },
-              ],
-            },
-          } as any,
-        ],
-      },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(context.messages).toHaveLength(1);
-    const toolMsg = context.messages[0] as any;
-    expect(toolMsg.role).toBe('toolResult');
-    expect(toolMsg.isError).toBe(false);
-    expect(warnings).toEqual([]);
-  });
+it("converts tool result with content type output", () => {
+  const messages: ModelMessage[] = [
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "call_content",
+          toolName: "read",
+          output: {
+            type: "content",
+            value: [
+              { type: "text", text: "File line 1" },
+              { type: "text", text: "File line 2" },
+            ],
+          },
+        } as any,
+      ],
+    },
+  ];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(context.messages).toHaveLength(1);
+  const toolMsg = context.messages[0] as any;
+  expect(toolMsg.role).toBe("toolResult");
+  expect(toolMsg.isError).toBe(false);
+  expect(warnings).toEqual([]);
+});
 
-  // ── Assistant message edge cases ──
+// ── Assistant message edge cases ──
 
-  it('skips assistant message with empty content array', () => {
-    const messages: ModelMessage[] = [
-      { role: 'assistant', content: [] as any },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(context.messages).toHaveLength(0);
-    expect(warnings).toEqual([]);
-  });
+it("skips assistant message with empty content array", () => {
+  const messages: ModelMessage[] = [{ role: "assistant", content: [] as any }];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(context.messages).toHaveLength(0);
+  expect(warnings).toEqual([]);
+});
 
-  // ── Multiple tool results ──
+// ── Multiple tool results ──
 
-  it('converts multiple tool results in one tool message', () => {
-    const messages: ModelMessage[] = [
-      {
-        role: 'tool',
-        content: [
-          {
-            type: 'tool-result',
-            toolCallId: 'call_001',
-            toolName: 'read',
-            output: { type: 'text', value: 'Content A' },
-          } as any,
-          {
-            type: 'tool-result',
-            toolCallId: 'call_002',
-            toolName: 'grep',
-            output: { type: 'text', value: 'Content B' },
-          } as any,
-        ],
-      },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(context.messages).toHaveLength(2);
-    expect(context.messages[0].role).toBe('toolResult');
-    expect(context.messages[1].role).toBe('toolResult');
-    expect(warnings).toEqual([]);
-  });
+it("converts multiple tool results in one tool message", () => {
+  const messages: ModelMessage[] = [
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: "call_001",
+          toolName: "read",
+          output: { type: "text", value: "Content A" },
+        } as any,
+        {
+          type: "tool-result",
+          toolCallId: "call_002",
+          toolName: "grep",
+          output: { type: "text", value: "Content B" },
+        } as any,
+      ],
+    },
+  ];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(context.messages).toHaveLength(2);
+  expect(context.messages[0].role).toBe("toolResult");
+  expect(context.messages[1].role).toBe("toolResult");
+  expect(warnings).toEqual([]);
+});
 
-  // ── Image objects ──
+// ── Image objects ──
 
-  it('converts user message with image object (not string URL)', () => {
-    const messages: ModelMessage[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Analyze' },
-          {
-            type: 'image',
-            image: { data: 'base64data', mimeType: 'image/jpeg' } as any,
-          } as any,
-        ],
-      },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(context.messages).toHaveLength(1);
-    expect(warnings).toEqual([]);
-  });
+it("converts user message with image object (not string URL)", () => {
+  const messages: ModelMessage[] = [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Analyze" },
+        {
+          type: "image",
+          image: { data: "base64data", mimeType: "image/jpeg" } as any,
+        } as any,
+      ],
+    },
+  ];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(context.messages).toHaveLength(1);
+  expect(warnings).toEqual([]);
+});
 
-  it('warns about image URL object in image part', () => {
-    const messages: ModelMessage[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'image', image: new URL('https://example.com/photo.jpg') } as any,
-        ],
-      },
-    ];
-    const { context, warnings } = convertToPiMessages(messages);
-    expect(warnings.length).toBeGreaterThan(0);
-    expect(warnings[0]).toContain('Image URLs are not supported');
-  });
+it("warns about image URL object in image part", () => {
+  const messages: ModelMessage[] = [
+    {
+      role: "user",
+      content: [
+        {
+          type: "image",
+          image: new URL("https://example.com/photo.jpg"),
+        } as any,
+      ],
+    },
+  ];
+  const { context, warnings } = convertToPiMessages(messages);
+  expect(warnings.length).toBeGreaterThan(0);
+  expect(warnings[0]).toContain("Image URLs are not supported");
+});
 ```
 
 - [ ] **Step 2: 运行 convert-to-pi-messages 测试**
@@ -1287,9 +1379,11 @@ git commit -m "test: supplement convert-to-pi-messages tests for file type, tool
 ### Task 10: Tests — Supplement pi-language-model.test.ts
 
 **Files:**
+
 - Modify: `test/pi-language-model.test.ts`
 
 **Interfaces:**
+
 - Consumes: 现有测试文件
 - Produces: 追加 8 个测试覆盖 truncateToolResult、abort、extractToolCallFromPartial、generateAllWarnings、createEmptyUsage
 
@@ -1298,110 +1392,115 @@ git commit -m "test: supplement convert-to-pi-messages tests for file type, tool
 在 `test/pi-language-model.test.ts` 的最后一个 `describe` 块之后、文件末尾的 `});` 之前，追加：
 
 ```typescript
-  describe('truncateToolResult', () => {
-    it('returns full result when below max size', () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).truncateToolResult('short result');
-      expect(result).toBe('short result');
-    });
-
-    it('truncates result exceeding max size', () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const longText = 'a'.repeat(15000);
-      const result = (model as any).truncateToolResult(longText);
-      expect(result.length).toBeLessThan(longText.length);
-      expect(result).toContain('[truncated');
-      expect(result).toContain('chars]');
-    });
-
-    it('respects custom maxToolResultSize', () => {
-      const model = new PiLanguageModel(
-        createModelOptions({ settings: { maxToolResultSize: 50 } })
-      );
-      const longText = 'a'.repeat(100);
-      const result = (model as any).truncateToolResult(longText);
-      expect(result.length).toBeLessThanOrEqual(50 + '[truncated X chars]'.length + 10);
-      expect(result).toContain('[truncated');
-    });
+describe("truncateToolResult", () => {
+  it("returns full result when below max size", () => {
+    const model = new PiLanguageModel(createModelOptions());
+    const result = (model as any).truncateToolResult("short result");
+    expect(result).toBe("short result");
   });
 
-  describe('abort handling in doGenerate', () => {
-    let mockSession: ReturnType<typeof createMockSession>;
-
-    beforeEach(() => {
-      mockSession = createMockSession();
-      piCodingAgent.__setMockSession(mockSession.session);
-    });
-
-    it('calls session.abort() when abortSignal is pre-aborted', async () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const abortController = new AbortController();
-      abortController.abort(); // pre-abort
-
-      const generatePromise = model.doGenerate({
-        prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
-        abortSignal: abortController.signal,
-      });
-
-      // Should fail because session creation may abort
-      await expect(generatePromise).rejects.toThrow();
-    });
+  it("truncates result exceeding max size", () => {
+    const model = new PiLanguageModel(createModelOptions());
+    const longText = "a".repeat(15000);
+    const result = (model as any).truncateToolResult(longText);
+    expect(result.length).toBeLessThan(longText.length);
+    expect(result).toContain("[truncated");
+    expect(result).toContain("chars]");
   });
 
-  describe('extractToolCallFromPartial', () => {
-    it('returns null when partial has no content', () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial({}, 0);
-      expect(result).toBeNull();
-    });
+  it("respects custom maxToolResultSize", () => {
+    const model = new PiLanguageModel(
+      createModelOptions({ settings: { maxToolResultSize: 50 } }),
+    );
+    const longText = "a".repeat(100);
+    const result = (model as any).truncateToolResult(longText);
+    expect(result.length).toBeLessThanOrEqual(
+      50 + "[truncated X chars]".length + 10,
+    );
+    expect(result).toContain("[truncated");
+  });
+});
 
-    it('returns null when content is not an array', () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial({ content: 'string' }, 0);
-      expect(result).toBeNull();
-    });
+describe("abort handling in doGenerate", () => {
+  let mockSession: ReturnType<typeof createMockSession>;
 
-    it('returns null when content item is not a toolCall', () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial(
-        { content: [{ type: 'text', text: 'hello' }] },
-        0
-      );
-      expect(result).toBeNull();
-    });
+  beforeEach(() => {
+    mockSession = createMockSession();
+    piCodingAgent.__setMockSession(mockSession.session);
   });
 
-  describe('generateAllWarnings', () => {
-    it('reports all unsupported parameters', () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const warnings = (model as any).generateAllWarnings(
-        {
-          temperature: 0.7,
-          topP: 0.9,
-          topK: 40,
-          presencePenalty: 0.5,
-          frequencyPenalty: 0.3,
-          stopSequences: ['END'],
-          seed: 42,
-        },
-        'test prompt',
-        []
-      );
-      const unsupported = warnings.filter((w: any) => w.type === 'unsupported');
-      expect(unsupported.length).toBe(7);
+  it("calls session.abort() when abortSignal is pre-aborted", async () => {
+    const model = new PiLanguageModel(createModelOptions());
+    const abortController = new AbortController();
+    abortController.abort(); // pre-abort
+
+    const generatePromise = model.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
+      abortSignal: abortController.signal,
     });
+
+    // Should fail because session creation may abort
+    await expect(generatePromise).rejects.toThrow();
+  });
+});
+
+describe("extractToolCallFromPartial", () => {
+  it("returns null when partial has no content", () => {
+    const model = new PiLanguageModel(createModelOptions());
+    const result = (model as any).extractToolCallFromPartial({}, 0);
+    expect(result).toBeNull();
   });
 
-  describe('createEmptyUsage', () => {
-    it('returns a correctly structured empty usage object', () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const usage = (model as any).createEmptyUsage();
-      expect(usage).toHaveProperty('inputTokens');
-      expect(usage).toHaveProperty('outputTokens');
-      expect(usage.inputTokens.total).toBeUndefined();
-      expect(usage.outputTokens.total).toBeUndefined();
-    });
+  it("returns null when content is not an array", () => {
+    const model = new PiLanguageModel(createModelOptions());
+    const result = (model as any).extractToolCallFromPartial(
+      { content: "string" },
+      0,
+    );
+    expect(result).toBeNull();
   });
+
+  it("returns null when content item is not a toolCall", () => {
+    const model = new PiLanguageModel(createModelOptions());
+    const result = (model as any).extractToolCallFromPartial(
+      { content: [{ type: "text", text: "hello" }] },
+      0,
+    );
+    expect(result).toBeNull();
+  });
+});
+
+describe("generateAllWarnings", () => {
+  it("reports all unsupported parameters", () => {
+    const model = new PiLanguageModel(createModelOptions());
+    const warnings = (model as any).generateAllWarnings(
+      {
+        temperature: 0.7,
+        topP: 0.9,
+        topK: 40,
+        presencePenalty: 0.5,
+        frequencyPenalty: 0.3,
+        stopSequences: ["END"],
+        seed: 42,
+      },
+      "test prompt",
+      [],
+    );
+    const unsupported = warnings.filter((w: any) => w.type === "unsupported");
+    expect(unsupported.length).toBe(7);
+  });
+});
+
+describe("createEmptyUsage", () => {
+  it("returns a correctly structured empty usage object", () => {
+    const model = new PiLanguageModel(createModelOptions());
+    const usage = (model as any).createEmptyUsage();
+    expect(usage).toHaveProperty("inputTokens");
+    expect(usage).toHaveProperty("outputTokens");
+    expect(usage.inputTokens.total).toBeUndefined();
+    expect(usage.outputTokens.total).toBeUndefined();
+  });
+});
 ```
 
 - [ ] **Step 2: 运行 pi-language-model 测试**
@@ -1424,6 +1523,7 @@ git commit -m "test: supplement pi-language-model tests for truncate, abort, hel
 ### Task 11: Final Verification
 
 **Files:**
+
 - (none, verification only)
 
 - [ ] **Step 1: 运行全量测试**

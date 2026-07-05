@@ -26,17 +26,17 @@ vi.mock("@earendil-works/pi-ai", () => {
           "claude-sonnet-4": mockModel(
             "claude-sonnet-4",
             "anthropic",
-            "Claude Sonnet 4"
+            "Claude Sonnet 4",
           ),
           "claude-opus-4": mockModel(
             "claude-opus-4",
             "anthropic",
-            "Claude Opus 4"
+            "Claude Opus 4",
           ),
           "claude-haiku-4": mockModel(
             "claude-haiku-4",
             "anthropic",
-            "Claude Haiku 4"
+            "Claude Haiku 4",
           ),
         },
         openai: {
@@ -49,7 +49,7 @@ vi.mock("@earendil-works/pi-ai", () => {
           "gemini-2.5-pro": mockModel(
             "gemini-2.5-pro",
             "google",
-            "Gemini 2.5 Pro"
+            "Gemini 2.5 Pro",
           ),
         },
       };
@@ -95,7 +95,7 @@ describe("createPi", () => {
     it("throws NoSuchModelError for invalid model ID", () => {
       const provider = createPi();
       expect(() => provider("nonexistent/unknown-model-12345")).toThrow(
-        NoSuchModelError
+        NoSuchModelError,
       );
     });
 
@@ -127,7 +127,7 @@ describe("createPi", () => {
     it("embeddingModel() throws NoSuchModelError", () => {
       const provider = createPi();
       expect(() => provider.embeddingModel("any-model")).toThrow(
-        NoSuchModelError
+        NoSuchModelError,
       );
       try {
         provider.embeddingModel("any-model");

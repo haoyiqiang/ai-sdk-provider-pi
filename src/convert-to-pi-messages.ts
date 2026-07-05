@@ -70,7 +70,7 @@ export function convertToPiMessages(prompt: readonly ModelMessage[]): {
  */
 function convertUserMessage(
   message: ModelMessage & { role: "user" },
-  warnings: string[]
+  warnings: string[],
 ): UserMessage {
   if (typeof message.content === "string") {
     return {
@@ -152,7 +152,7 @@ function convertUserMessage(
  * Returns null if the message has no usable content.
  */
 function convertAssistantMessage(
-  message: ModelMessage & { role: "assistant" }
+  message: ModelMessage & { role: "assistant" },
 ): AssistantMessage | null {
   const content: AssistantMessage["content"] = [];
 
@@ -222,7 +222,7 @@ function convertAssistantMessage(
  * AI SDK v6: ToolResultPart has `output: ToolResultOutput` (not `result`)
  */
 function convertToolMessage(
-  message: ModelMessage & { role: "tool" }
+  message: ModelMessage & { role: "tool" },
 ): ToolResultMessage[] {
   const results: ToolResultMessage[] = [];
 
@@ -315,7 +315,7 @@ function convertImagePart(part: {
  * Converts binary data to base64 string.
  */
 function convertBinaryToBase64(
-  data: Uint8Array | ArrayBuffer
+  data: Uint8Array | ArrayBuffer,
 ): string | undefined {
   if (typeof Buffer !== "undefined") {
     const buffer =

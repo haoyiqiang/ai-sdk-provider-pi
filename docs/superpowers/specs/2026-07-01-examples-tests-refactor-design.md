@@ -1,9 +1,11 @@
 # Design: Examples, Test Coverage, and Code Refactoring
 
 ## Date
+
 2026-07-01
 
 ## Status
+
 Approved
 
 ## Overview
@@ -35,6 +37,7 @@ examples/
 ### 1.2 各示例详情
 
 **basic-generate.ts**
+
 - 使用默认 `pi` provider
 - 调用 `generateText({ model: pi('sonnet'), prompt })`
 - 输出 text、usage、finishReason
@@ -42,28 +45,33 @@ examples/
 - 资源清理：model.dispose()
 
 **basic-stream.ts**
+
 - 使用默认 `pi` provider
 - 调用 `streamText({ model: pi('sonnet'), prompt })`
 - 使用 `for await (const chunk of result.textStream)` 输出
 - 展示 fullStream 获取 reasoning/tool 信息
 
 **tool-execution.ts**
+
 - 使用 `createPi({ cwd })`
 - 让 agent 执行 `read` / `bash` 工具
 - 展示 tool-call 和 tool-result 出现在输出中
 - 展示 `noTools: 'all'` 禁用工具
 
 **custom-provider.ts**
+
 - 使用 `createPi({ authStorage, logger })`
 - 展示自定义 AuthStorage 和 ModelRegistry
 - 展示多模型切换
 
 **error-handling.ts**
+
 - 展示 try/catch 捕获 `APICallError`
 - 使用 `isAuthenticationError` / `isTimeoutError` / `isContextOverflowError` 判断
 - 使用 `getErrorMetadata` 提取元数据
 
 **conversation-history.ts**
+
 - 展示多轮对话（messages 数组）
 - 展示 system prompt
 - 展示 `appendSystemPrompt`
@@ -117,21 +125,25 @@ examples/
 ### 3.2 提取 4 个私有 helper
 
 **`#extractMessageEndData(event)`**
+
 - 输入：message_end 事件
 - 输出：`{ usage, finishReason, piMeta }`
 - 替代位置：doGenerate L262-264, doStream L486-488
 
 **`#setupAbortHandler(signal, session)`**
+
 - 输入：AbortSignal, AgentSession
 - 输出：cleanup function
 - 替代位置：doGenerate L221-231, doStream L527-536
 
 **`#handlePromptError(error)`**
+
 - 输入：error, unsubscribe, cleanup, controller?
 - 行为：unsubscribe + cleanup + invalidateSession + controller.error/reject
 - 替代位置：doGenerate L303-312, doStream L538-546
 
 **`#finalizeStreamParts(controller, activeTextId, activeReasoningId, startTime, piMeta, finishReason, usage)`**
+
 - 关闭未完成的 text/reasoning parts
 - 发送 finish 事件
 - 关闭 controller
@@ -146,18 +158,18 @@ examples/
 
 ## 4. 文件变更清单
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 新增 | `examples/basic-generate.ts` | 基本 generateText |
-| 新增 | `examples/basic-stream.ts` | 基本 streamText |
-| 新增 | `examples/tool-execution.ts` | 工具执行 |
-| 新增 | `examples/custom-provider.ts` | 自定义 provider |
-| 新增 | `examples/error-handling.ts` | 错误处理 |
-| 新增 | `examples/conversation-history.ts` | 多轮对话 |
-| 新增 | `test/pi-provider.test.ts` | createPi 工厂测试 |
-| 修改 | `test/convert-to-pi-messages.test.ts` | 补充 9 个测试 |
-| 修改 | `test/pi-language-model.test.ts` | 补充 8 个测试 |
-| 修改 | `src/pi-language-model.ts` | 提取 4 个 helper |
+| 操作 | 文件                                  | 说明              |
+| ---- | ------------------------------------- | ----------------- |
+| 新增 | `examples/basic-generate.ts`          | 基本 generateText |
+| 新增 | `examples/basic-stream.ts`            | 基本 streamText   |
+| 新增 | `examples/tool-execution.ts`          | 工具执行          |
+| 新增 | `examples/custom-provider.ts`         | 自定义 provider   |
+| 新增 | `examples/error-handling.ts`          | 错误处理          |
+| 新增 | `examples/conversation-history.ts`    | 多轮对话          |
+| 新增 | `test/pi-provider.test.ts`            | createPi 工厂测试 |
+| 修改 | `test/convert-to-pi-messages.test.ts` | 补充 9 个测试     |
+| 修改 | `test/pi-language-model.test.ts`      | 补充 8 个测试     |
+| 修改 | `src/pi-language-model.ts`            | 提取 4 个 helper  |
 
 ## 5. 不变更
 

@@ -165,7 +165,7 @@ export function handlePiError(
     modelId?: string;
     sessionId?: string;
     promptExcerpt?: string;
-  } = {}
+  } = {},
 ): never {
   // Already an AI SDK error — re-throw as-is
   if (error instanceof APICallError || error instanceof LoadAPIKeyError) {

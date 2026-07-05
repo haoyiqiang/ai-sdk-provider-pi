@@ -36,7 +36,7 @@ async function main() {
       console.log("=== Warnings ===");
       for (const w of warnings) {
         console.log(
-          `  - ${w.type}: ${"message" in w ? w.message : (w.details ?? "no details")}`
+          `  - ${w.type}: ${"message" in w ? w.message : (w.details ?? "no details")}`,
         );
       }
     }

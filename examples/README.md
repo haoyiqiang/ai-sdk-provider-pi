@@ -20,14 +20,14 @@ npx tsx basic-generate.ts
 
 ## 示例列表
 
-| 示例 | 文件 | 说明 |
-|------|------|------|
-| **基础文本生成** | `basic-generate.ts` | 使用 `generateText()` 发送 prompt 并获取完整响应 |
-| **流式响应** | `basic-stream.ts` | 使用 `streamText()` 逐 token 流式输出 |
-| **多轮对话** | `conversation-history.ts` | 多轮对话，通过 `messages` 数组维护对话历史 |
-| **工具执行** | `tool-execution.ts` | Pi 自动执行工具（read, bash 等），演示 `noTools` 选项 |
-| **错误处理** | `error-handling.ts` | 演示错误类型守卫、元数据提取、真实 API 错误处理 |
-| **自定义 Provider** | `custom-provider.ts` | 使用 `createPi()` 配置自定义 AuthStorage 和 Logger |
+| 示例                | 文件                      | 说明                                                  |
+| ------------------- | ------------------------- | ----------------------------------------------------- |
+| **基础文本生成**    | `basic-generate.ts`       | 使用 `generateText()` 发送 prompt 并获取完整响应      |
+| **流式响应**        | `basic-stream.ts`         | 使用 `streamText()` 逐 token 流式输出                 |
+| **多轮对话**        | `conversation-history.ts` | 多轮对话，通过 `messages` 数组维护对话历史            |
+| **工具执行**        | `tool-execution.ts`       | Pi 自动执行工具（read, bash 等），演示 `noTools` 选项 |
+| **错误处理**        | `error-handling.ts`       | 演示错误类型守卫、元数据提取、真实 API 错误处理       |
+| **自定义 Provider** | `custom-provider.ts`      | 使用 `createPi()` 配置自定义 AuthStorage 和 Logger    |
 
 ## 模型配置
 
@@ -49,12 +49,12 @@ PI_MODEL_ID=anthropic/claude-sonnet-4
 
 ## API Key 配置
 
-| 模型提供商 | 环境变量 | 获取地址 |
-|-----------|---------|---------|
-| DeepSeek | `DEEPSEEK_API_KEY` | https://platform.deepseek.com/api_keys |
-| Anthropic | `ANTHROPIC_API_KEY` | https://console.anthropic.com/settings/keys |
-| OpenAI | `OPENAI_API_KEY` | https://platform.openai.com/api-keys |
-| Google | `GOOGLE_GENERATIVE_AI_API_KEY` | https://aistudio.google.com/apikey |
+| 模型提供商 | 环境变量                       | 获取地址                                    |
+| ---------- | ------------------------------ | ------------------------------------------- |
+| DeepSeek   | `DEEPSEEK_API_KEY`             | https://platform.deepseek.com/api_keys      |
+| Anthropic  | `ANTHROPIC_API_KEY`            | https://console.anthropic.com/settings/keys |
+| OpenAI     | `OPENAI_API_KEY`               | https://platform.openai.com/api-keys        |
+| Google     | `GOOGLE_GENERATIVE_AI_API_KEY` | https://aistudio.google.com/apikey          |
 
 Pi 的 `AuthStorage` 会自动读取环境变量，也支持从 `~/.pi/agent/auth.json` 读取。
 

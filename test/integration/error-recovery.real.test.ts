@@ -8,7 +8,7 @@ const test = runIntegration ? it : it.skip;
 describe.runIf(runIntegration)("Real error scenarios", () => {
   test("invalid model ID throws NoSuchModelError", () => {
     expect(() => pi("nonexistent/unknown-model-12345")).toThrow(
-      NoSuchModelError
+      NoSuchModelError,
     );
   });
 

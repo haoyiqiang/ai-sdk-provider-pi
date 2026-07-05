@@ -196,7 +196,7 @@ describe("validateModelAvailability", () => {
     const result = validateModelAvailability(
       "anthropic",
       "unknown-model",
-      registry
+      registry,
     );
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("not found");
@@ -212,7 +212,7 @@ describe("validateModelAvailability", () => {
     const result = validateModelAvailability(
       "anthropic",
       "claude-sonnet-4",
-      registry
+      registry,
     );
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("No API key");
@@ -228,7 +228,7 @@ describe("validateModelAvailability", () => {
     const result = validateModelAvailability(
       "anthropic",
       "claude-sonnet-4",
-      registry
+      registry,
     );
     expect(result.warnings).toEqual([]);
     expect(result.model).toBe(fakeModel);

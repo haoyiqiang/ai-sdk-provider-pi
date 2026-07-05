@@ -46,7 +46,7 @@ async function main() {
     console.log("  User: 我的名字是张三。");
     console.log(`  Assistant: ${assistantReply}`);
     console.log(
-      `  Tokens: in=${turn1Result.usage.inputTokens ?? "N/A"}, out=${turn1Result.usage.outputTokens ?? "N/A"}`
+      `  Tokens: in=${turn1Result.usage.inputTokens ?? "N/A"}, out=${turn1Result.usage.outputTokens ?? "N/A"}`,
     );
     console.log();
 
@@ -72,7 +72,7 @@ async function main() {
     console.log("  User: 你还记得我的名字吗？");
     console.log(`  Assistant: ${reply2}`);
     console.log(
-      `  Tokens: in=${turn2Result.usage.inputTokens ?? "N/A"}, out=${turn2Result.usage.outputTokens ?? "N/A"}`
+      `  Tokens: in=${turn2Result.usage.inputTokens ?? "N/A"}, out=${turn2Result.usage.outputTokens ?? "N/A"}`,
     );
   } catch (error) {
     console.error("Error:", error);

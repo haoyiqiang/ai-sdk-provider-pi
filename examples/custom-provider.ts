@@ -40,14 +40,14 @@ async function main() {
     console.log(text);
     console.log();
     console.log(
-      `Tokens: in=${usage.inputTokens ?? "N/A"}, out=${usage.outputTokens ?? "N/A"}`
+      `Tokens: in=${usage.inputTokens ?? "N/A"}, out=${usage.outputTokens ?? "N/A"}`,
     );
     if (providerMetadata) {
       console.log(
-        `Provider: ${(providerMetadata as any).provider?.value ?? "N/A"}`
+        `Provider: ${(providerMetadata as any).provider?.value ?? "N/A"}`,
       );
       console.log(
-        `Model: ${(providerMetadata as any).responseModel?.value ?? "N/A"}`
+        `Model: ${(providerMetadata as any).responseModel?.value ?? "N/A"}`,
       );
     }
   } catch (error) {

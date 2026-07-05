@@ -61,7 +61,7 @@ export interface PiProvider extends ProviderV3 {
    */
   languageModel(
     modelId: PiModelId,
-    settings?: PiLanguageModelSettings
+    settings?: PiLanguageModelSettings,
   ): LanguageModelV3;
 
   /**
@@ -143,7 +143,7 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
 
   const createModel = (
     modelId: PiModelId,
-    settings: PiLanguageModelSettings = {}
+    settings: PiLanguageModelSettings = {},
   ): LanguageModelV3 => {
     // Merge provider-level settings with model-level settings
     const mergedSettings: PiLanguageModelSettings = {
@@ -166,7 +166,7 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
     const availability = validateModelAvailability(
       model.provider,
       model.id,
-      registry
+      registry,
     );
 
     const allWarnings = [
@@ -186,11 +186,11 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
 
   const provider = function (
     modelId: PiModelId,
-    settings?: PiLanguageModelSettings
+    settings?: PiLanguageModelSettings,
   ) {
     if (new.target) {
       throw new Error(
-        "The Pi model function cannot be called with the new keyword."
+        "The Pi model function cannot be called with the new keyword.",
       );
     }
 

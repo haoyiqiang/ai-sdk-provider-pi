@@ -54,7 +54,7 @@ import type {
  * primitive values in objects.
  */
 function toProviderMetadata(
-  meta: PiProviderMetadata
+  meta: PiProviderMetadata,
 ): SharedV3ProviderMetadata {
   const result: Record<string, JSONObject> = {};
   for (const [key, value] of Object.entries(meta)) {
@@ -178,7 +178,7 @@ export class PiLanguageModel implements LanguageModelV3 {
   private invalidateSession(): void {
     if (this.session) {
       this.logger.info(
-        `Invalidating Pi session after error: ${this.sessionId}`
+        `Invalidating Pi session after error: ${this.sessionId}`,
       );
       this.session = null;
       this.sessionId = undefined;
@@ -224,7 +224,7 @@ export class PiLanguageModel implements LanguageModelV3 {
    */
   private setupAbortHandler(
     abortSignal: AbortSignal | undefined,
-    session: AgentSession
+    session: AgentSession,
   ): (() => void) | undefined {
     if (!abortSignal) {
       return undefined;
@@ -253,7 +253,7 @@ export class PiLanguageModel implements LanguageModelV3 {
     error: unknown,
     unsubscribe: () => void,
     cleanupAbort: (() => void) | undefined,
-    onError: (mappedError: unknown) => void
+    onError: (mappedError: unknown) => void,
   ): void {
     unsubscribe();
     cleanupAbort?.();
@@ -264,7 +264,7 @@ export class PiLanguageModel implements LanguageModelV3 {
           provider: this.model.provider,
           modelId: this.model.id,
           sessionId: this.sessionId,
-        })
+        }),
       );
     } catch (mapped) {
       onError(mapped);
@@ -284,7 +284,7 @@ export class PiLanguageModel implements LanguageModelV3 {
     finishReason: LanguageModelV3FinishReason,
     usage: LanguageModelV3Usage,
     cleanupAbort: (() => void) | undefined,
-    unsubscribe: () => void
+    unsubscribe: () => void,
   ): void {
     if (activeTextPartId) {
       controller.enqueue({ type: "text-end", id: activeTextPartId });
@@ -348,21 +348,21 @@ export class PiLanguageModel implements LanguageModelV3 {
         customToolDefs.push(
           createBashToolDefinition(baseCwd, {
             operations: ops.bash ?? createLocalBashOperations(),
-          })
+          }),
         );
         if (ops.read) {
           customToolDefs.push(
-            createReadToolDefinition(baseCwd, { operations: ops.read })
+            createReadToolDefinition(baseCwd, { operations: ops.read }),
           );
         }
         if (ops.write) {
           customToolDefs.push(
-            createWriteToolDefinition(baseCwd, { operations: ops.write })
+            createWriteToolDefinition(baseCwd, { operations: ops.write }),
           );
         }
         if (ops.edit) {
           customToolDefs.push(
-            createEditToolDefinition(baseCwd, { operations: ops.edit })
+            createEditToolDefinition(baseCwd, { operations: ops.edit }),
           );
         }
       }
@@ -413,13 +413,13 @@ export class PiLanguageModel implements LanguageModelV3 {
     const startTime = Date.now();
     try {
       const { context, warnings: conversionWarnings } = convertToPiMessages(
-        options.prompt
+        options.prompt,
       );
       const promptText = buildPromptFromContext(context);
       const allWarnings = this.generateAllWarnings(
         options,
         promptText,
-        conversionWarnings
+        conversionWarnings,
       );
       const session = await this.ensureSession();
 
@@ -430,7 +430,7 @@ export class PiLanguageModel implements LanguageModelV3 {
 
       const cleanupAbortListener = this.setupAbortHandler(
         options.abortSignal,
-        session
+        session,
       );
 
       let text = "";
@@ -522,7 +522,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                   provider: this.model.provider,
                   modelId: this.model.id,
                   sessionId: this.sessionId,
-                })
+                }),
               );
             } catch (mapped) {
               reject(mapped);
@@ -537,7 +537,7 @@ export class PiLanguageModel implements LanguageModelV3 {
               error,
               unsubscribe,
               cleanupAbortListener,
-              (mapped) => reject(mapped)
+              (mapped) => reject(mapped),
             );
           });
       });
@@ -560,13 +560,13 @@ export class PiLanguageModel implements LanguageModelV3 {
     const startTime = Date.now();
     try {
       const { context, warnings: conversionWarnings } = convertToPiMessages(
-        options.prompt
+        options.prompt,
       );
       const promptText = buildPromptFromContext(context);
       const allWarnings = this.generateAllWarnings(
         options,
         promptText,
-        conversionWarnings
+        conversionWarnings,
       );
       const session = await this.ensureSession();
 
@@ -697,7 +697,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                       }
                       const tc = this.extractToolCallFromPartial(
                         msgEvent.partial,
-                        msgEvent.contentIndex
+                        msgEvent.contentIndex,
                       );
                       if (tc) {
                         toolStates.set(tc.id, {
@@ -721,7 +721,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                     case "toolcall_delta": {
                       const tc = this.extractToolCallFromPartial(
                         msgEvent.partial,
-                        msgEvent.contentIndex
+                        msgEvent.contentIndex,
                       );
                       if (tc && toolStates.has(tc.id)) {
                         controller.enqueue({
@@ -782,7 +782,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                   const resultText = this.truncateToolResult(
                     typeof event.result === "string"
                       ? event.result
-                      : JSON.stringify(event.result ?? "")
+                      : JSON.stringify(event.result ?? ""),
                   );
                   controller.enqueue({
                     type: "tool-result",
@@ -830,7 +830,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                     finishReason,
                     usage,
                     cleanupAbortListener,
-                    unsubscribe
+                    unsubscribe,
                   );
                   break;
                 }
@@ -851,7 +851,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                     provider: this.model.provider,
                     modelId: this.model.id,
                     sessionId: this.sessionId,
-                  })
+                  }),
                 );
               } catch {
                 /* controller may already be closed */
@@ -861,7 +861,7 @@ export class PiLanguageModel implements LanguageModelV3 {
 
           cleanupAbortListener = this.setupAbortHandler(
             options.abortSignal,
-            session
+            session,
           );
 
           session
@@ -877,7 +877,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                   } catch {
                     /* controller may already be closed */
                   }
-                }
+                },
               );
             });
         },
@@ -888,7 +888,7 @@ export class PiLanguageModel implements LanguageModelV3 {
           session
             .abort()
             .catch((err: unknown) =>
-              this.logger.error(`Abort error on cancel: ${err}`)
+              this.logger.error(`Abort error on cancel: ${err}`),
             );
         },
       });
@@ -911,7 +911,7 @@ export class PiLanguageModel implements LanguageModelV3 {
 
   private extractToolCallFromPartial(
     partial: AssistantMessage,
-    contentIndex: number
+    contentIndex: number,
   ): { id: string; name: string; arguments: Record<string, unknown> } | null {
     if (!partial?.content || !Array.isArray(partial.content)) {
       return null;
@@ -974,7 +974,7 @@ export class PiLanguageModel implements LanguageModelV3 {
   private generateAllWarnings(
     options: LanguageModelV3CallOptions,
     _promptText: string,
-    conversionWarnings: string[]
+    conversionWarnings: string[],
   ): SharedV3Warning[] {
     const warnings: SharedV3Warning[] = [];
     const unsupportedParams: string[] = [];

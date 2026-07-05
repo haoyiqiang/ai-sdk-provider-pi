@@ -84,7 +84,7 @@ function createMockSession(): {
 }
 
 function createModelOptions(
-  overrides?: Partial<PiLanguageModelOptions>
+  overrides?: Partial<PiLanguageModelOptions>,
 ): PiLanguageModelOptions {
   return {
     id: "anthropic/claude-sonnet-4",
@@ -224,7 +224,7 @@ describe("PiLanguageModel", () => {
       expect(result.content).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ type: "text", text: "Hi there!" }),
-        ])
+        ]),
       );
       expect(result.finishReason.unified).toBe("stop");
       expect(result.usage.inputTokens.total).toBe(100);
@@ -304,7 +304,7 @@ describe("PiLanguageModel", () => {
             text: "Let me think...",
           }),
           expect.objectContaining({ type: "text", text: "My answer" }),
-        ])
+        ]),
       );
     });
 
@@ -376,7 +376,7 @@ describe("PiLanguageModel", () => {
             toolCallId: "tc_1",
             toolName: "read",
           }),
-        ])
+        ]),
       );
       expect(result.finishReason.unified).toBe("tool-calls");
     });
@@ -394,7 +394,7 @@ describe("PiLanguageModel", () => {
 
       // Verify system prompt was passed to session
       expect(mockSession.session.agent.state.systemPrompt).toBe(
-        "You are a test assistant."
+        "You are a test assistant.",
       );
 
       mockSession.emitEvent({
@@ -537,7 +537,7 @@ describe("PiLanguageModel", () => {
 
       const result = await generatePromise;
       const unsupportedWarnings = result.warnings.filter(
-        (w) => w.type === "unsupported"
+        (w) => w.type === "unsupported",
       );
       expect(unsupportedWarnings.length).toBe(2);
     });
@@ -772,7 +772,7 @@ describe("PiLanguageModel", () => {
 
       // Verify system prompt was passed
       expect(mockSession.session.agent.state.systemPrompt).toBe(
-        "You are a helpful stream assistant."
+        "You are a helpful stream assistant.",
       );
 
       mockSession.emitEvent({
@@ -1065,12 +1065,12 @@ describe("PiLanguageModel", () => {
 
     it("respects custom maxToolResultSize", () => {
       const model = new PiLanguageModel(
-        createModelOptions({ settings: { maxToolResultSize: 50 } })
+        createModelOptions({ settings: { maxToolResultSize: 50 } }),
       );
       const longText = "a".repeat(100);
       const result = (model as any).truncateToolResult(longText);
       expect(result.length).toBeLessThanOrEqual(
-        50 + "[truncated X chars]".length + 10
+        50 + "[truncated X chars]".length + 10,
       );
       expect(result).toContain("[truncated");
     });
@@ -1110,7 +1110,7 @@ describe("PiLanguageModel", () => {
       const model = new PiLanguageModel(createModelOptions());
       const result = (model as any).extractToolCallFromPartial(
         { content: "string" },
-        0
+        0,
       );
       expect(result).toBeNull();
     });
@@ -1119,7 +1119,7 @@ describe("PiLanguageModel", () => {
       const model = new PiLanguageModel(createModelOptions());
       const result = (model as any).extractToolCallFromPartial(
         { content: [{ type: "text", text: "hello" }] },
-        0
+        0,
       );
       expect(result).toBeNull();
     });
@@ -1139,7 +1139,7 @@ describe("PiLanguageModel", () => {
           seed: 42,
         },
         "test prompt",
-        []
+        [],
       );
       const unsupported = warnings.filter((w: any) => w.type === "unsupported");
       expect(unsupported.length).toBe(7);

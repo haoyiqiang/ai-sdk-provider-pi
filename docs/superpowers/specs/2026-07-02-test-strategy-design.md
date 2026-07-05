@@ -1,9 +1,11 @@
 # Design: Test Strategy Refactoring
 
 ## Date
+
 2026-07-02
 
 ## Status
+
 Approved
 
 ## Overview
@@ -38,12 +40,12 @@ Pi SDK 升级改字段名、改事件类型、删事件 → 不报错，测试�
 ### 改进方案
 
 ```typescript
-import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
 // ✅ 用真实 SDK 类型约束
 const event: AgentSessionEvent = {
-  type: 'message_update' as const,
-  assistantMessageEvent: { type: 'text_delta', delta: 'Hello' },
+  type: "message_update" as const,
+  assistantMessageEvent: { type: "text_delta", delta: "Hello" },
 };
 
 // ✅ createMockSession 返回类型化的事件队列
@@ -79,30 +81,35 @@ test/integration/
 ### 每个文件的测试内容
 
 **doGenerate.real.test.ts**
+
 - 基本 prompt → 返回 text（不重复单元测试的断言细节）
 - system prompt 正确传递
 - 多轮 messages 输入
 
 **doStream.real.test.ts**
+
 - 基本 prompt → textStream 产生 delta
 - fullStream 包含 start/delta/finish 事件
 - 流式中途 abort → 停止
 
 **tool-execution.real.test.ts**
+
 - 一个简单 tool 调用（如 read package.json）
 - 验证 tool-call 和 tool-result 出现在流中
 - noTools 禁用
 
 **error-recovery.real.test.ts**
+
 - 无效的 model ID → NoSuchModelError
 - 空的 API key → 认证错误
+
 ### 模型选择
 
-| 文件 | 推荐模型 | 理由 |
-|------|----------|------|
-| `doGenerate.real.test.ts` | `deepseek-v4-flash` | 便宜、快，验证核心流程足够 |
-| `doStream.real.test.ts` | `deepseek-v4-flash` | 同上 |
-| `tool-execution.real.test.ts` | `sonnet` | 工具调用能力更强，不易拒答 |
+| 文件                          | 推荐模型            | 理由                       |
+| ----------------------------- | ------------------- | -------------------------- |
+| `doGenerate.real.test.ts`     | `deepseek-v4-flash` | 便宜、快，验证核心流程足够 |
+| `doStream.real.test.ts`       | `deepseek-v4-flash` | 同上                       |
+| `tool-execution.real.test.ts` | `sonnet`            | 工具调用能力更强，不易拒答 |
 | `error-recovery.real.test.ts` | `deepseek-v4-flash` | 只测错误路径，不需要强模型 |
 
 ### 环境变量与 API Key
@@ -123,10 +130,13 @@ ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key
 ```
 
 API key 解析链（Pi SDK 原生支持）：
+
 1. 环境变量（如上所示）
 2. `~/.pi/agent/auth.json`
 3. 运行时 `authStorage.setRuntimeApiKey()`
+
 ### 控制变量
+
 ```typescript
 const runIntegration = process.env.PI_INTEGRATION_TEST === 'true';
 const test = runIntegration ? it : it.skip;
@@ -140,6 +150,7 @@ const test = runIntegration ? it : it.skip;
 维持 `PI_INTEGRATION_TEST=true` 的门禁不变。
 
 > 注意：`.env` 文件中的变量会被 Pi SDK 自动读取（它检查 `process.env`），不需要额外加载工具。
+
 ## 3. 不变更
 
 - 单元测试的数量和断言逻辑不变（只改类型标注）
@@ -148,14 +159,14 @@ const test = runIntegration ? it : it.skip;
 
 ## 4. 文件变更清单
 
-| 操作 | 文件 | 说明 |
-|------|------|------|
-| 修改 | `test/pi-language-model.test.ts` | mock 事件加 `AgentSessionEvent` 类型 |
+| 操作   | 文件                                                         | 说明                                 |
+| ------ | ------------------------------------------------------------ | ------------------------------------ |
+| 修改   | `test/pi-language-model.test.ts`                             | mock 事件加 `AgentSessionEvent` 类型 |
 | 重命名 | `test/pi-language-model.integration.test.ts` → 拆成 4 个文件 |
-| 删除 | `test/pi-language-model.integration.test.ts` | 拆完后删除 |
-| 新建 | `test/integration/doGenerate.real.test.ts` | 真实 doGenerate |
-| 新建 | `test/integration/doStream.real.test.ts` | 真实流式 |
-| 新建 | `test/integration/tool-execution.real.test.ts` | 真实工具 |
-| 新建 | `test/integration/error-recovery.real.test.ts` | 真实错误 |
-| 新建 | `test/integration/setup.ts` | 公共配置 |
-| 修改 | `package.json` | 加 `test:integration` script |
+| 删除   | `test/pi-language-model.integration.test.ts`                 | 拆完后删除                           |
+| 新建   | `test/integration/doGenerate.real.test.ts`                   | 真实 doGenerate                      |
+| 新建   | `test/integration/doStream.real.test.ts`                     | 真实流式                             |
+| 新建   | `test/integration/tool-execution.real.test.ts`               | 真实工具                             |
+| 新建   | `test/integration/error-recovery.real.test.ts`               | 真实错误                             |
+| 新建   | `test/integration/setup.ts`                                  | 公共配置                             |
+| 修改   | `package.json`                                               | 加 `test:integration` script         |

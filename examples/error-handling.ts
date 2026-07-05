@@ -30,7 +30,7 @@ async function main() {
     await generateText({ model, prompt: "Hello" });
   } catch (error) {
     console.log(
-      `   Caught: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`
+      `   Caught: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`,
     );
   }
 
@@ -40,7 +40,7 @@ async function main() {
     pi("");
   } catch (error) {
     console.log(
-      `   Caught: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`
+      `   Caught: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`,
     );
   }
 
@@ -63,13 +63,13 @@ async function main() {
   });
 
   console.log(
-    `   isAuthenticationError(fakeAuthError): ${isAuthenticationError(fakeAuthError)}`
+    `   isAuthenticationError(fakeAuthError): ${isAuthenticationError(fakeAuthError)}`,
   );
   console.log(
-    `   isTimeoutError(fakeTimeoutError): ${isTimeoutError(fakeTimeoutError)}`
+    `   isTimeoutError(fakeTimeoutError): ${isTimeoutError(fakeTimeoutError)}`,
   );
   console.log(
-    `   isContextOverflowError(fakeContextError): ${isContextOverflowError(fakeContextError)}`
+    `   isContextOverflowError(fakeContextError): ${isContextOverflowError(fakeContextError)}`,
   );
 
   // Example 4: Extract error metadata
@@ -105,7 +105,7 @@ async function main() {
     (model as any).dispose();
   } catch (error) {
     console.log(
-      `   Caught: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`
+      `   Caught: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`,
     );
     if (isAuthenticationError(error)) {
       console.log("   → 请检查 .env 中的 API key 配置");

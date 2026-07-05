@@ -24,7 +24,7 @@ export function parseModelId(modelId: string): {
     const parts = modelId.split("/");
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
       throw new Error(
-        `Invalid model ID format: '${modelId}'. Expected format: 'provider/model-id' (e.g., 'anthropic/claude-sonnet-4')`
+        `Invalid model ID format: '${modelId}'. Expected format: 'provider/model-id' (e.g., 'anthropic/claude-sonnet-4')`,
       );
     }
     return { provider: parts[0], modelId: parts[1] };
@@ -53,7 +53,7 @@ export function parseModelId(modelId: string): {
   }
 
   throw new Error(
-    `Unknown model alias: '${modelId}'. Use the 'provider/model-id' format (e.g., 'anthropic/claude-sonnet-4') or a known alias: ${Object.keys(aliases).join(", ")}`
+    `Unknown model alias: '${modelId}'. Use the 'provider/model-id' format (e.g., 'anthropic/claude-sonnet-4') or a known alias: ${Object.keys(aliases).join(", ")}`,
   );
 }
 
@@ -84,14 +84,14 @@ export function validateModelSettings(settings: PiLanguageModelSettings): {
   // Warn about high turn limits
   if (settings.maxTurns && settings.maxTurns > 50) {
     warnings.push(
-      `High maxTurns value (${settings.maxTurns}) may lead to long-running conversations`
+      `High maxTurns value (${settings.maxTurns}) may lead to long-running conversations`,
     );
   }
 
   // Warn about both tools and excludeTools
   if (settings.tools && settings.excludeTools) {
     warnings.push(
-      "Both tools and excludeTools are specified. The excludeTools filter will be applied after the tools whitelist."
+      "Both tools and excludeTools are specified. The excludeTools filter will be applied after the tools whitelist.",
     );
   }
 
@@ -112,21 +112,21 @@ export function validateModelAvailability(
   modelRegistry: {
     find: (provider: string, modelId: string) => Model<Api> | undefined;
     hasConfiguredAuth: (model: Model<Api>) => boolean;
-  }
+  },
 ): { warnings: string[]; model: Model<Api> | undefined } {
   const warnings: string[] = [];
 
   const model = modelRegistry.find(provider, modelId);
   if (!model) {
     warnings.push(
-      `Model '${provider}/${modelId}' not found in registry. Available models may differ from what you expect.`
+      `Model '${provider}/${modelId}' not found in registry. Available models may differ from what you expect.`,
     );
     return { warnings, model: undefined };
   }
 
   if (!modelRegistry.hasConfiguredAuth(model)) {
     warnings.push(
-      `No API key configured for provider '${provider}'. Set it via auth.json, environment variable, or AuthStorage.setRuntimeApiKey().`
+      `No API key configured for provider '${provider}'. Set it via auth.json, environment variable, or AuthStorage.setRuntimeApiKey().`,
     );
   }
 
