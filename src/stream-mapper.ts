@@ -4,6 +4,7 @@ import type {
   LanguageModelV3StreamPart,
   LanguageModelV3Usage,
   SharedV3ProviderMetadata,
+  SharedV3Warning,
 } from "@ai-sdk/provider";
 import type {
   AssistantMessage,
@@ -21,8 +22,8 @@ import type {
 
 // ─── Constants ───
 
-export const UNKNOWN_TOOL_NAME = "unknown_tool";
-export const MAX_TOOL_RESULT_SIZE = 10_000;
+import { UNKNOWN_TOOL_NAME, DEFAULT_MAX_TOOL_RESULT_SIZE } from "./tool-mapper.js";
+export { UNKNOWN_TOOL_NAME, DEFAULT_MAX_TOOL_RESULT_SIZE as MAX_TOOL_RESULT_SIZE };
 
 // ─── Context type ───
 
@@ -58,6 +59,10 @@ export interface StreamMapperContext {
   maxToolResultSize: number;
   /** Converts PiProviderMetadata to AI SDK's SharedV3ProviderMetadata. */
   toProviderMetadata: (meta: PiProviderMetadata) => SharedV3ProviderMetadata;
+  /** Accumulated warnings to emit on first stream-start. */
+  warnings: SharedV3Warning[];
+  /** Whether the stream-start part has been emitted. */
+  streamStarted: boolean;
 }
 
 // ── Helper functions ──
@@ -305,6 +310,11 @@ export function mapPiEventToStreamParts(
 
       switch (msgEvent.type) {
         case "start": {
+          // Emit stream-start with warnings on the first assistant message
+          if (!ctx.streamStarted) {
+            parts.push({ type: "stream-start", warnings: ctx.warnings });
+            ctx.streamStarted = true;
+          }
           // response-metadata part at assistant message start
           parts.push({
             type: "response-metadata",
@@ -454,9 +464,42 @@ export function mapPiEventToStreamParts(
           break;
         }
 
-        case "done":
+        case "done": {
+          // Fallback finish: emit a finish part with the final message's
+          // usage and reason. This guards against agent_end never arriving.
+          const doneMsg = msgEvent as unknown as {
+            message?: { usage?: unknown };
+            reason?: string;
+          };
+          parts.push({
+            type: "finish",
+            usage: doneMsg.message?.usage
+              ? extractUsage(doneMsg.message.usage as any)
+              : ctx.usage,
+            finishReason: doneMsg.reason
+              ? mapPiFinishReason(doneMsg.reason)
+              : ctx.finishReason,
+            providerMetadata: meta,
+          });
+          break;
+        }
         case "error": {
-          // No stream parts for done/error sub-events.
+          // Fallback finish for error sub-events
+          const errMsg = msgEvent as unknown as {
+            reason?: string;
+            error?: { usage?: unknown };
+          };
+          parts.push({
+            type: "finish",
+            usage:
+              errMsg.error?.usage
+                ? extractUsage(errMsg.error.usage as any)
+                : ctx.usage,
+            finishReason: errMsg.reason
+              ? mapPiFinishReason(errMsg.reason)
+              : ctx.finishReason,
+            providerMetadata: meta,
+          });
           break;
         }
       }

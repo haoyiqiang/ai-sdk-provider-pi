@@ -9,7 +9,7 @@
 export const DEFAULT_MAX_TOOL_RESULT_SIZE = 10_000;
 
 /** Fallback tool name when none is provided. */
-const UNKNOWN_TOOL_NAME = "unknown_tool";
+export const UNKNOWN_TOOL_NAME = "unknown_tool";
 
 /**
  * Structured result from truncating a JSON value.

@@ -12,6 +12,7 @@ import { NoSuchModelError } from "@ai-sdk/provider";
 import { generateId } from "@ai-sdk/provider-utils";
 import type {
   Api,
+  AssistantMessage,
   Context,
   Message,
   Model,
@@ -46,7 +47,6 @@ import type {
 import { createEmptyUsage, extractUsage, mapPiEventToStreamParts, toProviderMetadata } from "./stream-mapper.js";
 import type { StreamMapperContext } from "./stream-mapper.js";
 
-const MAX_TOOL_RESULT_SIZE = 10_000;
 
 /**
  * PiLanguageModel implements the AI SDK LanguageModelV3 interface
@@ -237,10 +237,21 @@ export class PiLanguageModel implements LanguageModelV3 {
     }
 
     if (priorMessages.length > 0) {
-      (session.agent.state as any).messages = priorMessages;
-      this.logger.debug(
-        `Seeded ${priorMessages.length} prior messages into session`,
-      );
+      // Pi Coding Agent stores conversation state in agent.state; the SDK
+      // type does not expose `messages` directly, but it's always present.
+      const agentState = session.agent.state as {
+        messages?: Message[];
+      };
+      if (agentState && typeof agentState === "object") {
+        agentState.messages = priorMessages;
+        this.logger.debug(
+          `Seeded ${priorMessages.length} prior messages into session`,
+        );
+      } else {
+        this.logger.warn(
+          "Unable to seed session history: agent.state is not a mutable object",
+        );
+      }
     }
   }
 
@@ -264,7 +275,10 @@ export class PiLanguageModel implements LanguageModelV3 {
       const { context, warnings: conversionWarnings } = convertToPiMessages(
         options.prompt,
       );
-      const promptText = buildPromptFromContext(context);
+      const promptText = this.injectStructuredOutputGuidance(
+        buildPromptFromContext(context),
+        options.responseFormat,
+      );
       const allWarnings = this.generateAllWarnings(
         options,
         promptText,
@@ -274,65 +288,56 @@ export class PiLanguageModel implements LanguageModelV3 {
       // the per-session serialization queue so concurrent calls on the same
       // model never issue overlapping session.prompt() invocations.
       return this.sessionManager.runSerialized((session) => {
-        // Pass system prompt to Pi session if provided
         if (context.systemPrompt) {
           session.agent.state.systemPrompt = context.systemPrompt;
         }
-        // Seed prior conversation history into session
         this.seedSessionHistory(session, context);
-
         const cleanupAbortListener = this.setupAbortHandler(
           options.abortSignal,
           session,
         );
-
-        let text = "";
-        const thinking: string[] = [];
-        const toolCalls: Array<{
-          toolCallId: string;
-          toolName: string;
-          input: string;
-        }> = [];
+        let finalAssistantMessage: AssistantMessage | undefined;
+        const toolResults: LanguageModelV3Content[] = [];
         let finishReason: LanguageModelV3FinishReason = {
           unified: "stop",
           raw: undefined,
         };
         let usage: LanguageModelV3Usage = createEmptyUsage();
         let piMeta: PiProviderMetadata = {};
-
         return new Promise((resolve, reject) => {
           const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
             try {
               switch (event.type) {
-                case "message_update": {
-                  const msgEvent = event.assistantMessageEvent;
-                  if (msgEvent.type === "text_delta") {
-                    text += msgEvent.delta;
-                  } else if (msgEvent.type === "thinking_delta") {
-                    thinking.push(msgEvent.delta);
-                  } else if (msgEvent.type === "toolcall_end") {
-                    toolCalls.push(mapPiToolCall(msgEvent.toolCall));
-                  }
+                case "tool_execution_end": {
+                  toolResults.push(
+                    mapPiToolResult(
+                      {
+                        toolCallId: event.toolCallId,
+                        toolName: event.toolName,
+                        result: event.result,
+                        isError: event.isError,
+                      },
+                      this.settings.maxToolResultSize ??
+                        DEFAULT_MAX_TOOL_RESULT_SIZE,
+                    ),
+                  );
                   break;
                 }
                 case "message_end": {
-                  if (
-                    event.type === "message_end" &&
-                    event.message?.role === "assistant"
-                  ) {
-                    const msg = event.message as any;
-                    usage = msg.usage
-                      ? extractUsage(msg.usage)
+                  if (isAssistantMessage(event.message)) {
+                    finalAssistantMessage = event.message;
+                    usage = event.message.usage
+                      ? extractUsage(event.message.usage)
                       : createEmptyUsage();
-                    finishReason = msg.stopReason
-                      ? mapPiFinishReason(msg.stopReason)
+                    finishReason = event.message.stopReason
+                      ? mapPiFinishReason(event.message.stopReason)
                       : { unified: "stop", raw: undefined };
                     piMeta = {
                       sessionId: this.sessionManager.currentSessionId,
-                      provider: msg.provider,
-                      modelId: msg.model,
-                      responseModel: msg.responseModel,
-                      responseId: msg.responseId,
+                      provider: event.message.provider,
+                      modelId: event.message.model,
+                      responseModel: event.message.responseModel,
+                      responseId: event.message.responseId,
                     };
                   }
                   break;
@@ -341,23 +346,9 @@ export class PiLanguageModel implements LanguageModelV3 {
                   unsubscribe();
                   cleanupAbortListener?.();
                   piMeta.durationMs = Date.now() - startTime;
-
-                  const content: LanguageModelV3Content[] = [];
-                  for (const t of thinking) {
-                    content.push({ type: "reasoning", text: t });
-                  }
-                  if (text) {
-                    content.push({ type: "text", text });
-                  }
-                  for (const tc of toolCalls) {
-                    content.push({
-                      type: "tool-call",
-                      toolCallId: tc.toolCallId,
-                      toolName: tc.toolName,
-                      input: tc.input,
-                    });
-                  }
-
+                  const content =
+                    mapAssistantMessageContent(finalAssistantMessage);
+                  content.push(...toolResults);
                   resolve({
                     content,
                     finishReason,
@@ -424,12 +415,17 @@ export class PiLanguageModel implements LanguageModelV3 {
       const { context, warnings: conversionWarnings } = convertToPiMessages(
         options.prompt,
       );
-      const promptText = buildPromptFromContext(context);
+      const promptText = this.injectStructuredOutputGuidance(
+        buildPromptFromContext(context),
+        options.responseFormat,
+      );
       const allWarnings = this.generateAllWarnings(
         options,
         promptText,
         conversionWarnings,
       );
+      const jsonRequested = options.responseFormat?.type === "json";
+      let streamedText = "";
       // Session is created lazily inside runSerialized; no need to eagerly acquire it here.
       const streamCtx: StreamMapperContext = {
         activeTextPartId: undefined,
@@ -443,15 +439,14 @@ export class PiLanguageModel implements LanguageModelV3 {
         modelId: this.modelId,
         startTime,
         maxToolResultSize:
-          this.settings.maxToolResultSize ?? MAX_TOOL_RESULT_SIZE,
+          this.settings.maxToolResultSize ?? DEFAULT_MAX_TOOL_RESULT_SIZE,
         toProviderMetadata,
+        warnings: allWarnings,
+        streamStarted: false,
       };
       let cleanupAbortListener: (() => void) | undefined;
       const stream = new ReadableStream<LanguageModelV3StreamPart>({
         start: (controller) => {
-          if (allWarnings.length > 0) {
-            controller.enqueue({ type: "stream-start", warnings: allWarnings });
-          }
 
           // Wrap session setup + subscribe + prompt in the per-session
           // serialization queue so concurrent doStream/doGenerate calls on
@@ -472,6 +467,9 @@ export class PiLanguageModel implements LanguageModelV3 {
                 try {
                   const parts = mapPiEventToStreamParts(event, streamCtx);
                   for (const part of parts) {
+                    if (jsonRequested && part.type === "text-delta") {
+                      streamedText += (part as { delta: string }).delta;
+                    }
                     controller.enqueue(part);
                   }
               // Handle agent_end: close controller and clean up
@@ -517,6 +515,13 @@ export class PiLanguageModel implements LanguageModelV3 {
                       }
                     },
                   );
+                })
+                .then(() => {
+                  if (jsonRequested && !isValidJson(streamedText)) {
+                    this.logger.warn(
+                      "Pi structured-output request completed with non-JSON text output.",
+                    );
+                  }
                 });
             })
             .catch((error: unknown) => {
@@ -567,6 +572,33 @@ export class PiLanguageModel implements LanguageModelV3 {
   // ─── Helper Methods ───
 
 
+  /**
+   * Builds a structured output guidance preamble when JSON response format
+   * is requested. Injects schema and instructions into the prompt text so
+   * the Pi agent knows to produce valid JSON.
+   */
+  private injectStructuredOutputGuidance(
+    promptText: string,
+    responseFormat?: LanguageModelV3CallOptions["responseFormat"],
+  ): string {
+    if (responseFormat?.type !== "json") {
+      return promptText;
+    }
+    const blocks: string[] = [
+      "Output format: return valid JSON only, no markdown code fences or extra commentary.",
+    ];
+    const schema = responseFormat.schema;
+    if (schema !== undefined) {
+      try {
+        blocks.push(`JSON schema:\n${JSON.stringify(schema, null, 2)}`);
+      } catch {
+        blocks.push(`JSON schema: ${String(schema)}`);
+      }
+    }
+    const guidance = blocks.join("\n\n");
+    this.logger.debug("Injecting structured output guidance into prompt");
+    return `${guidance}\n\n${promptText}`;
+  }
 
   private generateAllWarnings(
     options: LanguageModelV3CallOptions,
@@ -596,12 +628,8 @@ export class PiLanguageModel implements LanguageModelV3 {
     if (options.seed !== undefined) {
       unsupportedParams.push("seed");
     }
-    if (options.tools && options.tools.length > 0) {
-      unsupportedParams.push("tools");
-    }
-    if (options.toolChoice !== undefined) {
-      unsupportedParams.push("toolChoice");
-    }
+    // tools and toolChoice are compatibility warnings, not unsupported.
+    // Pi executes its own built-in tools — AI SDK-side tools are advisory only.
 
     for (const param of unsupportedParams) {
       warnings.push({
@@ -610,12 +638,99 @@ export class PiLanguageModel implements LanguageModelV3 {
         details: `Pi provider does not support the ${param} parameter.`,
       });
     }
+
+    // Compatibility warnings: Pi executes its own built-in tools
+    const compatibilityWarnings: Array<{ feature: string; details: string }> = [];
+    if (options.tools && options.tools.length > 0) {
+      compatibilityWarnings.push({
+        feature: "tools",
+        details:
+          "AI SDK tools were passed, but Pi executes its own built-in tools. Passed tools are ignored.",
+      });
+    }
+    if (options.toolChoice !== undefined) {
+      compatibilityWarnings.push({
+        feature: "toolChoice",
+        details: `toolChoice "${String(options.toolChoice)}" is advisory only — Pi controls tool execution internally.`,
+      });
+    }
+    for (const cw of compatibilityWarnings) {
+      warnings.push({
+        type: "compatibility",
+        feature: cw.feature,
+        details: cw.details,
+      });
+    }
     for (const warning of this.settingsValidationWarnings) {
       warnings.push({ type: "other", message: warning });
     }
     for (const warning of conversionWarnings) {
       warnings.push({ type: "other", message: warning });
     }
+    if (options.responseFormat?.type === "json") {
+      warnings.push({
+        type: "compatibility",
+        feature: "responseFormat",
+        details:
+          "JSON response format requested. Pi does not natively enforce structured outputs — JSON output is best-effort and may not validate against schema.",
+      });
+    }
     return warnings;
   }
+}
+
+/** Checks whether a string is valid JSON. */
+function isValidJson(text: string): boolean {
+  const candidate = text.trim();
+  if (candidate.length === 0) {
+    return false;
+  }
+  try {
+    JSON.parse(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Type guard: checks whether value is a valid Pi AssistantMessage. */
+function isAssistantMessage(value: unknown): value is AssistantMessage {
+  if (typeof value !== "object" || value == null) {
+    return false;
+  }
+  const candidate = value as Partial<AssistantMessage>;
+  return (
+    candidate.role === "assistant" &&
+    Array.isArray(candidate.content) &&
+    typeof candidate.stopReason === "string"
+  );
+}
+
+/** Maps a Pi AssistantMessage to AI SDK LanguageModelV3Content array. */
+function mapAssistantMessageContent(
+  message: AssistantMessage | undefined,
+): LanguageModelV3Content[] {
+  if (message == null) {
+    return [];
+  }
+  const content: LanguageModelV3Content[] = [];
+  for (const part of message.content) {
+    if (part.type === "text") {
+      content.push({ type: "text", text: part.text });
+    } else if (part.type === "thinking") {
+      content.push({ type: "reasoning", text: part.thinking });
+    } else if (part.type === "toolCall") {
+      content.push({
+        type: "tool-call",
+        toolCallId: part.id,
+        toolName: part.name,
+        input:
+          typeof part.arguments === "string"
+            ? part.arguments
+            : JSON.stringify(part.arguments ?? {}),
+        providerExecuted: true,
+      });
+    }
+  }
+  return content;
 }

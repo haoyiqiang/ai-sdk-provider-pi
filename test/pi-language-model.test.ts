@@ -266,7 +266,10 @@ describe("PiLanguageModel", () => {
         type: "message_end",
         message: {
           role: "assistant",
-          content: [],
+          content: [
+            { type: "thinking", thinking: "Let me think..." },
+            { type: "text", text: "My answer" },
+          ],
           api: "anthropic-messages",
           provider: "anthropic",
           model: "claude-sonnet-4",
@@ -338,7 +341,9 @@ describe("PiLanguageModel", () => {
         type: "message_end",
         message: {
           role: "assistant",
-          content: [],
+          content: [
+            { type: "toolCall", id: "tc_1", name: "read", arguments: { path: "/tmp/test.txt" } },
+          ],
           api: "anthropic-messages",
           provider: "anthropic",
           model: "claude-sonnet-4",

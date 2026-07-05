@@ -38,6 +38,8 @@ function createCtx(overrides?: Partial<StreamMapperContext>): StreamMapperContex
     startTime: Date.now(),
     maxToolResultSize: MAX_TOOL_RESULT_SIZE,
     toProviderMetadata,
+    warnings: [],
+    streamStarted: false,
     ...overrides,
   };
 }
@@ -93,9 +95,10 @@ describe("mapPiEventToStreamParts", () => {
       });
       const parts = mapPiEventToStreamParts(event, ctx);
 
-      expect(parts).toHaveLength(1);
-      expect(parts[0].type).toBe("response-metadata");
-      const meta = parts[0] as { type: "response-metadata"; id?: string; timestamp?: Date; modelId?: string };
+      expect(parts).toHaveLength(2);
+      expect(parts[0].type).toBe("stream-start");
+      expect(parts[1].type).toBe("response-metadata");
+      const meta = parts[1] as { type: "response-metadata"; id?: string; timestamp?: Date; modelId?: string };
       expect(meta.id).toBe("test-session");
       expect(meta.timestamp).toBeInstanceOf(Date);
       expect(meta.modelId).toBe("test-model");
@@ -109,9 +112,10 @@ describe("mapPiEventToStreamParts", () => {
       });
       const parts = mapPiEventToStreamParts(event, ctxWithoutSession);
 
-      expect(parts).toHaveLength(1);
-      expect(parts[0].type).toBe("response-metadata");
-      const meta = parts[0] as { type: "response-metadata"; id?: string };
+      expect(parts).toHaveLength(2);
+      expect(parts[0].type).toBe("stream-start");
+      expect(parts[1].type).toBe("response-metadata");
+      const meta = parts[1] as { type: "response-metadata"; id?: string };
       expect(meta.id).toBeDefined();
       expect(meta.id).not.toBe("");
     });
@@ -1027,18 +1031,18 @@ describe("mapPiEventToStreamParts", () => {
   // ═══════════════════════════════════════════
 
   describe("message_update done/error sub-events", () => {
-    it("done sub-event returns empty array", () => {
+    it("done sub-event emits a finish part", () => {
       const event = makeMessageUpdateEvent({
         type: "done",
         reason: "stop",
         message: {} as any,
       });
-
       const parts = mapPiEventToStreamParts(event, ctx);
-      expect(parts).toEqual([]);
+      expect(parts).toHaveLength(1);
+      expect(parts[0].type).toBe("finish");
     });
 
-    it("error sub-event returns empty array", () => {
+    it("error sub-event emits a finish part", () => {
       const event = makeMessageUpdateEvent({
         type: "error",
         reason: "aborted",
@@ -1046,7 +1050,8 @@ describe("mapPiEventToStreamParts", () => {
       });
 
       const parts = mapPiEventToStreamParts(event, ctx);
-      expect(parts).toEqual([]);
+      expect(parts).toHaveLength(1);
+      expect(parts[0].type).toBe("finish");
     });
   });
 
