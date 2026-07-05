@@ -12,6 +12,8 @@ import { NoSuchModelError } from "@ai-sdk/provider";
 import { generateId } from "@ai-sdk/provider-utils";
 import type {
   Api,
+  Context,
+  Message,
   Model,
 } from "@earendil-works/pi-ai";
 import type {
@@ -24,12 +26,13 @@ import {
   convertToPiMessages,
 } from "./convert-to-pi-messages.js";
 import { handlePiError } from "./errors.js";
+import { PiSessionManager } from "./pi-session-manager.js";
+import { mapPiFinishReason } from "./map-pi-finish-reason.js";
 import {
   DEFAULT_MAX_TOOL_RESULT_SIZE,
   mapPiToolCall,
   mapPiToolResult,
 } from "./tool-mapper.js";
-import { mapPiFinishReason } from "./map-pi-finish-reason.js";
 import type {
   Logger,
   PiLanguageModelOptions,
@@ -37,6 +40,7 @@ import type {
   PiProviderMetadata,
   PiProviderSettings,
   SandboxConfig,
+  ToolStreamState,
 } from "./types.js";
 
 import { createEmptyUsage, mapPiEventToStreamParts, toProviderMetadata, truncateToolResult, UNKNOWN_TOOL_NAME, } from "./stream-mapper.js";
@@ -148,6 +152,7 @@ export class PiLanguageModel implements LanguageModelV3 {
 
   // ─── Shared Helpers ───
 
+  /**
   /**
    * Sets up an abort signal handler for the session.
    * Returns a cleanup function to remove the listener.
@@ -334,7 +339,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                     ? mapPiFinishReason(msg.stopReason)
                     : { unified: "stop", raw: undefined };
                   piMeta = {
-                    sessionId: this.sessionId,
+                    sessionId: this.sessionManager.currentSessionId,
                     provider: msg.provider,
                     modelId: msg.model,
                     responseModel: msg.responseModel,
@@ -453,7 +458,7 @@ export class PiLanguageModel implements LanguageModelV3 {
         usage: createEmptyUsage(),
         finishReason: { unified: "stop", raw: undefined },
         generateId,
-        sessionId: this.sessionId,
+        sessionId: this.sessionManager.currentSessionId,
         startTime,
         maxToolResultSize:
           this.settings.maxToolResultSize ?? MAX_TOOL_RESULT_SIZE,
@@ -577,12 +582,12 @@ export class PiLanguageModel implements LanguageModelV3 {
     }
     if (options.seed !== undefined) {
       unsupportedParams.push("seed");
-    }
     if (options.tools && options.tools.length > 0) {
       unsupportedParams.push("tools");
     }
     if (options.toolChoice !== undefined) {
       unsupportedParams.push("toolChoice");
+    }
     }
 
     for (const param of unsupportedParams) {
