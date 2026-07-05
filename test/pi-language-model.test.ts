@@ -6,6 +6,7 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PiLanguageModel } from "../src/pi-language-model.js";
 import type { PiLanguageModelOptions } from "../src/types.js";
+import { createEmptyUsage, extractToolCallFromPartial, truncateToolResult } from "../src/stream-mapper.js";
 
 // ─── Mock factories ───
 
@@ -1050,25 +1051,22 @@ describe("PiLanguageModel", () => {
   describe("truncateToolResult", () => {
     it("returns full result when below max size", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).truncateToolResult("short result");
+      const result = truncateToolResult("short result", 10_000);
       expect(result).toBe("short result");
     });
 
     it("truncates result exceeding max size", () => {
       const model = new PiLanguageModel(createModelOptions());
       const longText = "a".repeat(15_000);
-      const result = (model as any).truncateToolResult(longText);
+      const result = truncateToolResult(longText, 10_000);
       expect(result.length).toBeLessThan(longText.length);
       expect(result).toContain("[truncated");
       expect(result).toContain("chars]");
     });
 
     it("respects custom maxToolResultSize", () => {
-      const model = new PiLanguageModel(
-        createModelOptions({ settings: { maxToolResultSize: 50 } }),
-      );
       const longText = "a".repeat(100);
-      const result = (model as any).truncateToolResult(longText);
+      const result = truncateToolResult(longText, 50);
       expect(result.length).toBeLessThanOrEqual(
         50 + "[truncated X chars]".length + 10,
       );
@@ -1102,24 +1100,26 @@ describe("PiLanguageModel", () => {
   describe("extractToolCallFromPartial", () => {
     it("returns null when partial has no content", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial({}, 0);
+      const result = extractToolCallFromPartial({} as any, 0, () => "test-id");
       expect(result).toBeNull();
     });
 
     it("returns null when content is not an array", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial(
-        { content: "string" },
+      const result = extractToolCallFromPartial(
+        { content: "string" } as any,
         0,
+        () => "test-id",
       );
       expect(result).toBeNull();
     });
 
     it("returns null when content item is not a toolCall", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial(
-        { content: [{ type: "text", text: "hello" }] },
+      const result = extractToolCallFromPartial(
+        { content: [{ type: "text", text: "hello" }] } as any,
         0,
+        () => "test-id",
       );
       expect(result).toBeNull();
     });
@@ -1149,7 +1149,7 @@ describe("PiLanguageModel", () => {
   describe("createEmptyUsage", () => {
     it("returns a correctly structured empty usage object", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const usage = (model as any).createEmptyUsage();
+      const usage = createEmptyUsage();
       expect(usage).toHaveProperty("inputTokens");
       expect(usage).toHaveProperty("outputTokens");
       expect(usage.inputTokens.total).toBeUndefined();

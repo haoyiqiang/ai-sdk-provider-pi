@@ -1,5 +1,4 @@
 import type {
-  JSONObject,
   LanguageModelV3,
   LanguageModelV3CallOptions,
   LanguageModelV3Content,
@@ -13,9 +12,7 @@ import { NoSuchModelError } from "@ai-sdk/provider";
 import { generateId } from "@ai-sdk/provider-utils";
 import type {
   Api,
-  AssistantMessage,
   Model,
-  Usage as PiUsage,
 } from "@earendil-works/pi-ai";
 import type {
   AgentSession,
@@ -45,27 +42,12 @@ import type {
   PiProviderMetadata,
   PiProviderSettings,
   SandboxConfig,
-  ToolStreamState,
 } from "./types.js";
 
-/**
- * Converts PiProviderMetadata to AI SDK's SharedV3ProviderMetadata.
- * SharedV3ProviderMetadata = Record<string, JSONObject>, so we need to wrap
- * primitive values in objects.
- */
-function toProviderMetadata(
-  meta: PiProviderMetadata,
-): SharedV3ProviderMetadata {
-  const result: Record<string, JSONObject> = {};
-  for (const [key, value] of Object.entries(meta)) {
-    if (value != null && typeof value === "object") {
-      result[key] = value as JSONObject;
-    } else if (value != null) {
-      result[key] = { value: String(value) } as unknown as JSONObject;
-    }
-  }
-  return result;
-}
+import { createEmptyUsage, mapPiEventToStreamParts, toProviderMetadata, truncateToolResult, UNKNOWN_TOOL_NAME, } from "./stream-mapper.js";
+import type { StreamMapperContext } from "./stream-mapper.js";
+
+const MAX_TOOL_RESULT_SIZE = 10_000;
 
 /**
  * PiLanguageModel implements the AI SDK LanguageModelV3 interface
@@ -98,8 +80,6 @@ export class PiLanguageModel implements LanguageModelV3 {
   private sessionId: string | undefined;
   private disposed = false;
 
-  private static readonly UNKNOWN_TOOL_NAME = "unknown_tool";
-  private static readonly MAX_TOOL_RESULT_SIZE = 10_000;
 
   constructor(options: PiLanguageModelOptions) {
     this.modelId = options.id;
@@ -188,37 +168,6 @@ export class PiLanguageModel implements LanguageModelV3 {
   // ─── Shared Helpers ───
 
   /**
-   * Extracts usage, finishReason, and providerMetadata from a message_end event.
-   */
-  private extractMessageEndData(event: AgentSessionEvent): {
-    usage: LanguageModelV3Usage;
-    finishReason: LanguageModelV3FinishReason;
-    piMeta: PiProviderMetadata;
-  } {
-    let usage: LanguageModelV3Usage = this.createEmptyUsage();
-    let finishReason: LanguageModelV3FinishReason = {
-      unified: "stop",
-      raw: undefined,
-    };
-    let piMeta: PiProviderMetadata = {};
-
-    if (event.type === "message_end" && event.message?.role === "assistant") {
-      const msg = event.message as AssistantMessage;
-      usage = this.extractUsage(msg.usage);
-      finishReason = mapPiFinishReason(msg.stopReason);
-      piMeta = {
-        sessionId: this.sessionId,
-        provider: msg.provider,
-        modelId: msg.model,
-        responseModel: msg.responseModel,
-        responseId: msg.responseId,
-      };
-    }
-
-    return { usage, finishReason, piMeta };
-  }
-
-  /**
    * Sets up an abort signal handler for the session.
    * Returns a cleanup function to remove the listener.
    */
@@ -271,40 +220,6 @@ export class PiLanguageModel implements LanguageModelV3 {
     }
   }
 
-  /**
-   * Finalizes a doStream controller: closes any open text/reasoning parts,
-   * enqueues the finish event, closes the controller, and cleans up.
-   */
-  private finalizeStreamParts(
-    controller: ReadableStreamDefaultController<LanguageModelV3StreamPart>,
-    activeTextPartId: string | undefined,
-    activeReasoningPartId: string | undefined,
-    startTime: number,
-    piMeta: PiProviderMetadata,
-    finishReason: LanguageModelV3FinishReason,
-    usage: LanguageModelV3Usage,
-    cleanupAbort: (() => void) | undefined,
-    unsubscribe: () => void,
-  ): void {
-    if (activeTextPartId) {
-      controller.enqueue({ type: "text-end", id: activeTextPartId });
-    }
-    if (activeReasoningPartId) {
-      controller.enqueue({ type: "reasoning-end", id: activeReasoningPartId });
-    }
-    piMeta.durationMs = Date.now() - startTime;
-
-    controller.enqueue({
-      type: "finish",
-      finishReason,
-      usage,
-      providerMetadata: toProviderMetadata(piMeta),
-    });
-
-    controller.close();
-    cleanupAbort?.();
-    unsubscribe();
-  }
 
   private async ensureSession(): Promise<AgentSession> {
     if (this.disposed) {
@@ -444,7 +359,7 @@ export class PiLanguageModel implements LanguageModelV3 {
         unified: "stop",
         raw: undefined,
       };
-      let usage: LanguageModelV3Usage = this.createEmptyUsage();
+      let usage: LanguageModelV3Usage = createEmptyUsage();
       let piMeta: PiProviderMetadata = {};
 
       return new Promise((resolve, reject) => {
@@ -470,10 +385,38 @@ export class PiLanguageModel implements LanguageModelV3 {
                 break;
               }
               case "message_end": {
-                const endData = this.extractMessageEndData(event);
-                usage = endData.usage;
-                finishReason = endData.finishReason;
-                piMeta = endData.piMeta;
+                if (
+                  event.type === "message_end" &&
+                  event.message?.role === "assistant"
+                ) {
+                  const msg = event.message as any;
+                  usage = msg.usage
+                    ? {
+                        inputTokens: {
+                          total: msg.usage.input ?? undefined,
+                          noCache: undefined,
+                          cacheRead: msg.usage.cacheRead ?? undefined,
+                          cacheWrite: msg.usage.cacheWrite ?? undefined,
+                        },
+                        outputTokens: {
+                          total: msg.usage.output ?? undefined,
+                          text: undefined,
+                          reasoning: undefined,
+                        },
+                        raw: msg.usage as any,
+                      }
+                    : createEmptyUsage();
+                  finishReason = msg.stopReason
+                    ? mapPiFinishReason(msg.stopReason)
+                    : { unified: "stop", raw: undefined };
+                  piMeta = {
+                    sessionId: this.sessionId,
+                    provider: msg.provider,
+                    modelId: msg.model,
+                    responseModel: msg.responseModel,
+                    responseId: msg.responseId,
+                  };
+                }
                 break;
               }
               case "agent_end": {
@@ -575,17 +518,21 @@ export class PiLanguageModel implements LanguageModelV3 {
         session.agent.state.systemPrompt = context.systemPrompt;
       }
 
-      let hasStartedText = false;
-      let hasStartedReasoning = false;
-      let activeTextPartId: string | undefined;
-      let activeReasoningPartId: string | undefined;
-      const toolStates = new Map<string, ToolStreamState>();
-      let finishReason: LanguageModelV3FinishReason = {
-        unified: "stop",
-        raw: undefined,
+      // Create stream mapper context (mutable state carried across invocations)
+      const streamCtx: StreamMapperContext = {
+        activeTextPartId: undefined,
+        activeReasoningPartId: undefined,
+        toolStates: new Map(),
+        piMeta: {},
+        usage: createEmptyUsage(),
+        finishReason: { unified: "stop", raw: undefined },
+        generateId,
+        sessionId: this.sessionId,
+        startTime,
+        maxToolResultSize:
+          this.settings.maxToolResultSize ?? MAX_TOOL_RESULT_SIZE,
+        toProviderMetadata,
       };
-      let usage: LanguageModelV3Usage = this.createEmptyUsage();
-      let piMeta: PiProviderMetadata = {};
       let cleanupAbortListener: (() => void) | undefined;
 
       const stream = new ReadableStream<LanguageModelV3StreamPart>({
@@ -596,250 +543,16 @@ export class PiLanguageModel implements LanguageModelV3 {
 
           const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
             try {
-              switch (event.type) {
-                case "message_update": {
-                  const msgEvent = event.assistantMessageEvent;
-                  const meta = toProviderMetadata(piMeta);
+              const parts = mapPiEventToStreamParts(event, streamCtx);
+              for (const part of parts) {
+                controller.enqueue(part);
+              }
 
-                  switch (msgEvent.type) {
-                    case "text_delta": {
-                      if (!hasStartedText) {
-                        hasStartedText = true;
-                        activeTextPartId = generateId();
-                        controller.enqueue({
-                          type: "text-start",
-                          id: activeTextPartId,
-                          providerMetadata: meta,
-                        });
-                      }
-                      controller.enqueue({
-                        type: "text-delta",
-                        id: activeTextPartId!,
-                        delta: msgEvent.delta,
-                        providerMetadata: meta,
-                      });
-                      break;
-                    }
-                    case "thinking_delta": {
-                      if (!hasStartedReasoning) {
-                        hasStartedReasoning = true;
-                        activeReasoningPartId = generateId();
-                        controller.enqueue({
-                          type: "reasoning-start",
-                          id: activeReasoningPartId,
-                          providerMetadata: meta,
-                        });
-                      }
-                      controller.enqueue({
-                        type: "reasoning-delta",
-                        id: activeReasoningPartId!,
-                        delta: msgEvent.delta,
-                        providerMetadata: meta,
-                      });
-                      break;
-                    }
-                    case "text_start": {
-                      if (!hasStartedText) {
-                        hasStartedText = true;
-                        activeTextPartId = generateId();
-                        controller.enqueue({
-                          type: "text-start",
-                          id: activeTextPartId,
-                          providerMetadata: meta,
-                        });
-                      }
-                      break;
-                    }
-                    case "thinking_start": {
-                      if (!hasStartedReasoning) {
-                        hasStartedReasoning = true;
-                        activeReasoningPartId = generateId();
-                        controller.enqueue({
-                          type: "reasoning-start",
-                          id: activeReasoningPartId,
-                          providerMetadata: meta,
-                        });
-                      }
-                      break;
-                    }
-                    case "text_end": {
-                      if (activeTextPartId) {
-                        controller.enqueue({
-                          type: "text-end",
-                          id: activeTextPartId,
-                          providerMetadata: meta,
-                        });
-                        activeTextPartId = undefined;
-                        hasStartedText = false;
-                      }
-                      break;
-                    }
-                    case "thinking_end": {
-                      if (activeReasoningPartId) {
-                        controller.enqueue({
-                          type: "reasoning-end",
-                          id: activeReasoningPartId,
-                          providerMetadata: meta,
-                        });
-                        activeReasoningPartId = undefined;
-                        hasStartedReasoning = false;
-                      }
-                      break;
-                    }
-                    case "toolcall_start": {
-                      if (activeTextPartId) {
-                        controller.enqueue({
-                          type: "text-end",
-                          id: activeTextPartId,
-                        });
-                        activeTextPartId = undefined;
-                        hasStartedText = false;
-                      }
-                      const tc = this.extractToolCallFromPartial(
-                        msgEvent.partial,
-                        msgEvent.contentIndex,
-                      );
-                      if (tc) {
-                        toolStates.set(tc.id, {
-                          toolCallId: tc.id,
-                          toolName: tc.name,
-                          args: tc.arguments,
-                          startTime: Date.now(),
-                          inputAccumulator: "",
-                          hasEmittedStart: true,
-                        });
-                        controller.enqueue({
-                          type: "tool-input-start",
-                          id: tc.id,
-                          toolName: tc.name,
-                          providerExecuted: true,
-                          dynamic: true,
-                        });
-                      }
-                      break;
-                    }
-                    case "toolcall_delta": {
-                      const tc = this.extractToolCallFromPartial(
-                        msgEvent.partial,
-                        msgEvent.contentIndex,
-                      );
-                      if (tc && toolStates.has(tc.id)) {
-                        controller.enqueue({
-                          type: "tool-input-delta",
-                          id: tc.id,
-                          delta: msgEvent.delta,
-                        });
-                        toolStates.get(tc.id)!.inputAccumulator +=
-                          msgEvent.delta;
-                      }
-                      break;
-                    }
-                    case "toolcall_end": {
-                      const toolCallId = msgEvent.toolCall.id;
-                      if (toolStates.has(toolCallId)) {
-                        controller.enqueue({
-                          type: "tool-input-end",
-                          id: toolCallId,
-                        });
-                        controller.enqueue({
-                          type: "tool-call",
-                          toolCallId,
-                          toolName: msgEvent.toolCall.name,
-                          input:
-                            typeof msgEvent.toolCall.arguments === "string"
-                              ? msgEvent.toolCall.arguments
-                              : JSON.stringify(msgEvent.toolCall.arguments),
-                        });
-                      }
-                      break;
-                    }
-                  }
-                  break;
-                }
-
-                case "tool_execution_start": {
-                  if (!toolStates.has(event.toolCallId)) {
-                    toolStates.set(event.toolCallId, {
-                      toolCallId: event.toolCallId,
-                      toolName: event.toolName,
-                      args: event.args,
-                      startTime: Date.now(),
-                      inputAccumulator: "",
-                      hasEmittedStart: true,
-                    });
-                    controller.enqueue({
-                      type: "tool-input-start",
-                      id: event.toolCallId,
-                      toolName: event.toolName,
-                      providerExecuted: true,
-                      dynamic: true,
-                    });
-                  }
-                  break;
-                }
-
-                case "tool_execution_end": {
-                  const resultText = this.truncateToolResult(
-                    typeof event.result === "string"
-                      ? event.result
-                      : JSON.stringify(event.result ?? ""),
-                  );
-                  controller.enqueue({
-                    type: "tool-result",
-                    toolCallId: event.toolCallId,
-                    toolName: event.toolName,
-                    result: resultText as any,
-                    isError: event.isError || undefined,
-                    dynamic: true,
-                  });
-                  toolStates.delete(event.toolCallId);
-                  break;
-                }
-
-                case "message_end": {
-                  if (activeTextPartId) {
-                    controller.enqueue({
-                      type: "text-end",
-                      id: activeTextPartId,
-                    });
-                    activeTextPartId = undefined;
-                    hasStartedText = false;
-                  }
-                  if (activeReasoningPartId) {
-                    controller.enqueue({
-                      type: "reasoning-end",
-                      id: activeReasoningPartId,
-                    });
-                    activeReasoningPartId = undefined;
-                    hasStartedReasoning = false;
-                  }
-                  const endData = this.extractMessageEndData(event);
-                  usage = endData.usage;
-                  finishReason = endData.finishReason;
-                  piMeta = endData.piMeta;
-                  break;
-                }
-
-                case "agent_end": {
-                  this.finalizeStreamParts(
-                    controller,
-                    activeTextPartId,
-                    activeReasoningPartId,
-                    startTime,
-                    piMeta,
-                    finishReason,
-                    usage,
-                    cleanupAbortListener,
-                    unsubscribe,
-                  );
-                  break;
-                }
-
-                case "turn_start":
-                case "turn_end":
-                case "agent_start":
-                case "message_start":
-                  break;
+              // Handle agent_end: close controller and clean up
+              if (event.type === "agent_end") {
+                controller.close();
+                cleanupAbortListener?.();
+                unsubscribe();
               }
             } catch (error) {
               this.logger.error(`Error processing Pi event: ${error}`);
@@ -909,67 +622,7 @@ export class PiLanguageModel implements LanguageModelV3 {
 
   // ─── Helper Methods ───
 
-  private extractToolCallFromPartial(
-    partial: AssistantMessage,
-    contentIndex: number,
-  ): { id: string; name: string; arguments: Record<string, unknown> } | null {
-    if (!partial?.content || !Array.isArray(partial.content)) {
-      return null;
-    }
-    const item = partial.content[contentIndex];
-    if (item?.type !== "toolCall") {
-      return null;
-    }
-    const tc = item as {
-      type: "toolCall";
-      id: string;
-      name: string;
-      arguments: Record<string, unknown>;
-    };
-    return {
-      id: tc.id || generateId(),
-      name: tc.name || PiLanguageModel.UNKNOWN_TOOL_NAME,
-      arguments: tc.arguments || {},
-    };
-  }
 
-  private extractUsage(piUsage: PiUsage): LanguageModelV3Usage {
-    return {
-      inputTokens: {
-        total: piUsage.input ?? undefined,
-        noCache: undefined,
-        cacheRead: piUsage.cacheRead ?? undefined,
-        cacheWrite: piUsage.cacheWrite ?? undefined,
-      },
-      outputTokens: {
-        total: piUsage.output ?? undefined,
-        text: undefined,
-        reasoning: undefined,
-      },
-      raw: piUsage as unknown as JSONObject,
-    };
-  }
-
-  private createEmptyUsage(): LanguageModelV3Usage {
-    return {
-      inputTokens: {
-        total: undefined,
-        noCache: undefined,
-        cacheRead: undefined,
-        cacheWrite: undefined,
-      },
-      outputTokens: { total: undefined, text: undefined, reasoning: undefined },
-    };
-  }
-
-  private truncateToolResult(result: string): string {
-    const maxSize =
-      this.settings.maxToolResultSize ?? PiLanguageModel.MAX_TOOL_RESULT_SIZE;
-    if (result.length <= maxSize) {
-      return result;
-    }
-    return `${result.slice(0, maxSize)}...[truncated ${result.length - maxSize} chars]`;
-  }
 
   private generateAllWarnings(
     options: LanguageModelV3CallOptions,
