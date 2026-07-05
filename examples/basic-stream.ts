@@ -1,5 +1,5 @@
 /**
- * Basic streamText example using @haoyiqiang/ai-sdk-provider-pi.
+ * Basic streamText example using @kevinhao/ai-sdk-provider-pi.
  *
  * Usage: cp .env.example .env  # 配置 PI_MODEL_ID 和 API key
  *        npx tsx examples/basic-stream.ts

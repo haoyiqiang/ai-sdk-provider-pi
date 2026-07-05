@@ -1,5 +1,5 @@
 /**
- * Error handling example using @haoyiqiang/ai-sdk-provider-pi.
+ * Error handling example using @kevinhao/ai-sdk-provider-pi.
  *
  * Usage: npx tsx examples/error-handling.ts
  *

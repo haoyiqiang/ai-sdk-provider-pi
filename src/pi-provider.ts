@@ -22,7 +22,7 @@ import {
  *
  * @example
  * ```typescript
- * import { createPi } from '@haoyiqiang/ai-sdk-provider-pi';
+ * import { createPi } from '@kevinhao/ai-sdk-provider-pi';
  *
  * // Create a provider with default settings
  * const pi = createPi();
@@ -224,7 +224,7 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
  *
  * @example
  * ```typescript
- * import { pi } from '@haoyiqiang/ai-sdk-provider-pi';
+ * import { pi } from '@kevinhao/ai-sdk-provider-pi';
  * import { generateText } from 'ai';
  *
  * const { text } = await generateText({

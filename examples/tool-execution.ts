@@ -1,5 +1,5 @@
 /**
- * Tool execution example using @haoyiqiang/ai-sdk-provider-pi.
+ * Tool execution example using @kevinhao/ai-sdk-provider-pi.
  *
  * Demonstrates:
  *   - Tool execution (Pi reads files, runs commands)

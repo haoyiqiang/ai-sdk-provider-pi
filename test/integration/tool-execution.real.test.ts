@@ -31,7 +31,7 @@ describe.runIf(runIntegration)("Real tool execution", () => {
       });
       const text = extractText(content);
       expect(text).toBeTruthy();
-      expect(text.toLowerCase()).toContain("@haoyiqiang/ai-sdk-provider-pi");
+      expect(text.toLowerCase()).toContain("@kevinhao/ai-sdk-provider-pi");
     } finally {
       (model as any).dispose();
     }

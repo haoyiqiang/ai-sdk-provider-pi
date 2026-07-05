@@ -1,5 +1,5 @@
 {
-  "name": "@haoyiqiang/ai-sdk-provider-pi",
+  "name": "@kevinhao/ai-sdk-provider-pi",
   "version": "0.1.0",
   "description": "AI SDK v6 provider for Pi Coding Agent (supports 15+ LLM providers)",
   "keywords": [

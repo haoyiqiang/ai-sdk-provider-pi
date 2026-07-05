@@ -1,6 +1,6 @@
 # Examples
 
-@haoyiqiang/ai-sdk-provider-pi 的使用示例。
+@kevinhao/ai-sdk-provider-pi 的使用示例。
 
 ## 快速开始
 
