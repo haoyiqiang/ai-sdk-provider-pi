@@ -24,15 +24,22 @@ export type { PiErrorMetadata } from "./errors.js";
  */
 export {
   createAPICallError,
+  createAbortError,
   createAuthenticationError,
   createContextOverflowError,
   createTimeoutError,
   getErrorMetadata,
   handlePiError,
+  isAbortError,
   isAuthenticationError,
   isContextOverflowError,
+  isRetryableError,
   isTimeoutError,
+  RETRYABLE_CODES,
+  NON_RETRYABLE_CODES,
 } from "./errors.js";
+// Re-export pi-ai's isContextOverflow for AssistantMessage-based overflow detection
+export { isContextOverflow } from "./errors.js";
 /**
  * Finish reason mapping.
  * Maps Pi SDK stopReason values to AI SDK finish reasons.
