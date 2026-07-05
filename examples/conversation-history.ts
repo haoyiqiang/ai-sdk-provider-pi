@@ -1,5 +1,5 @@
 /**
- * Multi-turn conversation example using ai-sdk-provider-pi.
+ * Multi-turn conversation example using @haoyiqiang/ai-sdk-provider-pi.
  *
  * Demonstrates:
  *   - Multi-turn conversation with messages array

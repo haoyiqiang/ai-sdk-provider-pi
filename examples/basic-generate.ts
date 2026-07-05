@@ -1,5 +1,5 @@
 /**
- * Basic generateText example using ai-sdk-provider-pi.
+ * Basic generateText example using @haoyiqiang/ai-sdk-provider-pi.
  *
  * Usage: cp .env.example .env  # 配置 PI_MODEL_ID 和 API key
  *        npx tsx examples/basic-generate.ts

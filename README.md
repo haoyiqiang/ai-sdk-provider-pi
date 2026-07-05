@@ -1,17 +1,17 @@
-# ai-sdk-provider-pi
+# @haoyiqiang/ai-sdk-provider-pi
 
 AI SDK v6 provider for [Pi Coding Agent](https://github.com/earendil-works/pi-coding-agent). Use any of Pi's 15+ LLM providers with the Vercel AI SDK's `streamText()`, `generateText()`, `useChat()`, and [ai-elements](https://vercel.com/academy/ai-sdk/ai-elements) components.
 
 ## Installation
 
 ```bash
-npm install ai-sdk-provider-pi ai
+npm install @haoyiqiang/ai-sdk-provider-pi ai
 ```
 
 ## Quick Start
 
 ```typescript
-import { pi } from "ai-sdk-provider-pi";
+import { pi } from "@haoyiqiang/ai-sdk-provider-pi";
 import { generateText, streamText } from "ai";
 
 // Use the default provider with Anthropic Claude
@@ -111,7 +111,7 @@ npx tsx examples/basic-generate.ts
 ### Custom Provider
 
 ```typescript
-import { createPi } from "ai-sdk-provider-pi";
+import { createPi } from "@haoyiqiang/ai-sdk-provider-pi";
 import { AuthStorage } from "@earendil-works/pi-coding-agent";
 
 const pi = createPi({
@@ -144,7 +144,7 @@ Pi resolves API keys from multiple sources in priority order:
 4. **Fallback resolver**: `authStorage.setFallbackResolver(...)`
 
 ```typescript
-import { createPi, AuthStorage } from "ai-sdk-provider-pi";
+import { createPi, AuthStorage } from "@haoyiqiang/ai-sdk-provider-pi";
 
 const authStorage = AuthStorage.create();
 authStorage.setRuntimeApiKey("anthropic", process.env.ANTHROPIC_API_KEY!);
@@ -158,7 +158,7 @@ const pi = createPi({ authStorage });
 
 ```typescript
 // app/api/chat/route.ts
-import { pi } from "ai-sdk-provider-pi";
+import { pi } from "@haoyiqiang/ai-sdk-provider-pi";
 import { streamText } from "ai";
 
 export async function POST(req: Request) {
@@ -202,7 +202,7 @@ export default function Chat() {
 When using Pi with tools enabled, tool calls are automatically executed by the Pi agent and results are streamed back to the AI SDK consumer:
 
 ```typescript
-import { createPi } from "ai-sdk-provider-pi";
+import { createPi } from "@haoyiqiang/ai-sdk-provider-pi";
 
 const pi = createPi({
   cwd: "/path/to/project",
