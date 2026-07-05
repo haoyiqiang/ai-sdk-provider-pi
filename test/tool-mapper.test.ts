@@ -5,6 +5,7 @@ import {
   mapPiToolResult,
   safeStringify,
   truncateJsonValue,
+  toJsonValue,
 } from "../src/tool-mapper.js";
 
 // ─── safeStringify ───
@@ -260,5 +261,50 @@ describe("mapPiToolResult", () => {
 describe("DEFAULT_MAX_TOOL_RESULT_SIZE", () => {
   it("is 10_000", () => {
     expect(DEFAULT_MAX_TOOL_RESULT_SIZE).toBe(10_000);
+  });
+});
+
+// ─── toJsonValue ───
+
+describe("toJsonValue", () => {
+  it("passes through primitives", () => {
+    expect(toJsonValue("hello")).toBe("hello");
+    expect(toJsonValue(42)).toBe(42);
+    expect(toJsonValue(true)).toBe(true);
+    expect(toJsonValue(null)).toBe(null);
+    expect(toJsonValue(undefined)).toBe(undefined);
+  });
+
+  it("converts BigInt to string", () => {
+    expect(toJsonValue(BigInt(7))).toBe("7");
+    expect(toJsonValue({ n: BigInt(99) })).toEqual({ n: "99" });
+  });
+
+  it("drops functions and symbols, keeps other keys", () => {
+    const sym = Symbol("x");
+    const result = toJsonValue({
+      keep: 1,
+      fn: () => {},
+      [sym]: "ignored",
+    });
+    expect(result).toEqual({ keep: 1 });
+  });
+
+  it("replaces circular references with [Circular]", () => {
+    const obj: any = { name: "root" };
+    obj.self = obj;
+    const result = toJsonValue(obj) as any;
+    expect(result.name).toBe("root");
+    expect(result.self).toBe("[Circular]");
+  });
+
+  it("normalizes arrays (functions → null, BigInt → string)", () => {
+    const result = toJsonValue([1, BigInt(5), () => {}, "x"]);
+    expect(result).toEqual([1, "5", undefined, "x"]);
+  });
+
+  it("normalizes Date to ISO string", () => {
+    const d = new Date("2026-01-01T00:00:00Z");
+    expect(toJsonValue(d)).toBe("2026-01-01T00:00:00.000Z");
   });
 });

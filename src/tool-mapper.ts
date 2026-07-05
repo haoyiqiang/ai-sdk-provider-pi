@@ -106,6 +106,63 @@ export function truncateJsonValue(
 }
 
 /**
+ * Recursively normalizes an arbitrary value into a JSON-safe representation.
+ *
+ * - Functions / symbols / undefined are dropped (key-removed in objects,
+ *   replaced with null in arrays).
+ * - BigInt is converted to string.
+ * - Circular references are replaced with the string "[Circular]".
+ * - Everything else passes through.
+ *
+ * Running this before `safeStringify` guarantees that truncation never
+ * throws on pathological tool output (cycles, BigInt, non-serializable
+ * values).
+ */
+export function toJsonValue(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  const t = typeof value;
+  if (t === "string" || t === "number" || t === "boolean") {
+    return value;
+  }
+  if (t === "bigint") {
+    return value.toString();
+  }
+  if (t === "function" || t === "symbol") {
+    return undefined;
+  }
+  if (t !== "object") {
+    return String(value);
+  }
+  if (seen.has(value as object)) {
+    return "[Circular]";
+  }
+  seen.add(value as object);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((v) => toJsonValue(v, seen));
+    }
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (value instanceof Error) {
+      return { name: value.name, message: value.message, stack: value.stack };
+    }
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const normalized = toJsonValue(v, seen);
+      if (normalized !== undefined) {
+        out[k] = normalized;
+      }
+    }
+    return out;
+  } finally {
+    seen.delete(value as object);
+  }
+}
+
+/**
  * Maps a Pi tool call to the AI SDK tool-call content format.
  *
  * Handles both string and object arguments, using `safeStringify`
@@ -160,7 +217,7 @@ export function mapPiToolResult(
   const resultText =
     typeof event.result === "string"
       ? event.result
-      : safeStringify(event.result ?? "");
+      : safeStringify(toJsonValue(event.result ?? ""));
 
   const { preview } = truncateJsonValue(resultText, maxResultSize);
 

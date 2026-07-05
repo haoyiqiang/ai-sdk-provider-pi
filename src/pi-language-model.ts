@@ -43,7 +43,7 @@ import type {
   ToolStreamState,
 } from "./types.js";
 
-import { createEmptyUsage, mapPiEventToStreamParts, toProviderMetadata, truncateToolResult, UNKNOWN_TOOL_NAME, } from "./stream-mapper.js";
+import { createEmptyUsage, extractUsage, mapPiEventToStreamParts, toProviderMetadata } from "./stream-mapper.js";
 import type { StreamMapperContext } from "./stream-mapper.js";
 
 const MAX_TOOL_RESULT_SIZE = 10_000;
@@ -270,148 +270,138 @@ export class PiLanguageModel implements LanguageModelV3 {
         promptText,
         conversionWarnings,
       );
-      const session = await this.ensureSession();
+      // Wrap the full critical section (session setup + subscribe + prompt) in
+      // the per-session serialization queue so concurrent calls on the same
+      // model never issue overlapping session.prompt() invocations.
+      return this.sessionManager.runSerialized((session) => {
+        // Pass system prompt to Pi session if provided
+        if (context.systemPrompt) {
+          session.agent.state.systemPrompt = context.systemPrompt;
+        }
+        // Seed prior conversation history into session
+        this.seedSessionHistory(session, context);
 
-      // Pass system prompt to Pi session if provided
-      if (context.systemPrompt) {
-        session.agent.state.systemPrompt = context.systemPrompt;
-      }
-      // Seed prior conversation history into session
-      this.seedSessionHistory(session, context);
+        const cleanupAbortListener = this.setupAbortHandler(
+          options.abortSignal,
+          session,
+        );
 
-      const cleanupAbortListener = this.setupAbortHandler(
-        options.abortSignal,
-        session,
-      );
+        let text = "";
+        const thinking: string[] = [];
+        const toolCalls: Array<{
+          toolCallId: string;
+          toolName: string;
+          input: string;
+        }> = [];
+        let finishReason: LanguageModelV3FinishReason = {
+          unified: "stop",
+          raw: undefined,
+        };
+        let usage: LanguageModelV3Usage = createEmptyUsage();
+        let piMeta: PiProviderMetadata = {};
 
-      let text = "";
-      const thinking: string[] = [];
-      const toolCalls: Array<{
-        toolCallId: string;
-        toolName: string;
-        input: string;
-      }> = [];
-      let finishReason: LanguageModelV3FinishReason = {
-        unified: "stop",
-        raw: undefined,
-      };
-      let usage: LanguageModelV3Usage = createEmptyUsage();
-      let piMeta: PiProviderMetadata = {};
-
-      return new Promise((resolve, reject) => {
-        const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
-          try {
-            switch (event.type) {
-              case "message_update": {
-                const msgEvent = event.assistantMessageEvent;
-                if (msgEvent.type === "text_delta") {
-                  text += msgEvent.delta;
-                } else if (msgEvent.type === "thinking_delta") {
-                  thinking.push(msgEvent.delta);
-                } else if (msgEvent.type === "toolcall_end") {
-                  toolCalls.push(mapPiToolCall(msgEvent.toolCall));
-                }
-                break;
-              }
-              case "message_end": {
-                if (
-                  event.type === "message_end" &&
-                  event.message?.role === "assistant"
-                ) {
-                  const msg = event.message as any;
-                  usage = msg.usage
-                    ? {
-                        inputTokens: {
-                          total: msg.usage.input ?? undefined,
-                          noCache: undefined,
-                          cacheRead: msg.usage.cacheRead ?? undefined,
-                          cacheWrite: msg.usage.cacheWrite ?? undefined,
-                        },
-                        outputTokens: {
-                          total: msg.usage.output ?? undefined,
-                          text: undefined,
-                          reasoning: undefined,
-                        },
-                        raw: msg.usage as any,
-                      }
-                    : createEmptyUsage();
-                  finishReason = msg.stopReason
-                    ? mapPiFinishReason(msg.stopReason)
-                    : { unified: "stop", raw: undefined };
-                  piMeta = {
-                    sessionId: this.sessionManager.currentSessionId,
-                    provider: msg.provider,
-                    modelId: msg.model,
-                    responseModel: msg.responseModel,
-                    responseId: msg.responseId,
-                  };
-                }
-                break;
-              }
-              case "agent_end": {
-                unsubscribe();
-                cleanupAbortListener?.();
-                piMeta.durationMs = Date.now() - startTime;
-
-                const content: LanguageModelV3Content[] = [];
-                for (const t of thinking) {
-                  content.push({ type: "reasoning", text: t });
-                }
-                if (text) {
-                  content.push({ type: "text", text });
-                }
-                for (const tc of toolCalls) {
-                  content.push({
-                    type: "tool-call",
-                    toolCallId: tc.toolCallId,
-                    toolName: tc.toolName,
-                    input: tc.input,
-                  });
-                }
-
-                resolve({
-                  content,
-                  finishReason,
-                  usage,
-                  warnings: allWarnings,
-                  response: {
-                    id: this.sessionManager.currentSessionId ?? generateId(),
-                    timestamp: new Date(),
-                    modelId: this.modelId,
-                  },
-                  request: { body: { prompt: promptText } },
-                  providerMetadata: toProviderMetadata(piMeta),
-                });
-                break;
-              }
-            }
-          } catch (error) {
-            unsubscribe();
-            cleanupAbortListener?.();
+        return new Promise((resolve, reject) => {
+          const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
             try {
-              reject(
-                handlePiError(error, {
-                  provider: this.model.provider,
-                  modelId: this.model.id,
-                  sessionId: this.sessionManager.currentSessionId,
-                }),
-              );
-            } catch (mapped) {
-              reject(mapped);
-            }
-          }
-        });
+              switch (event.type) {
+                case "message_update": {
+                  const msgEvent = event.assistantMessageEvent;
+                  if (msgEvent.type === "text_delta") {
+                    text += msgEvent.delta;
+                  } else if (msgEvent.type === "thinking_delta") {
+                    thinking.push(msgEvent.delta);
+                  } else if (msgEvent.type === "toolcall_end") {
+                    toolCalls.push(mapPiToolCall(msgEvent.toolCall));
+                  }
+                  break;
+                }
+                case "message_end": {
+                  if (
+                    event.type === "message_end" &&
+                    event.message?.role === "assistant"
+                  ) {
+                    const msg = event.message as any;
+                    usage = msg.usage
+                      ? extractUsage(msg.usage)
+                      : createEmptyUsage();
+                    finishReason = msg.stopReason
+                      ? mapPiFinishReason(msg.stopReason)
+                      : { unified: "stop", raw: undefined };
+                    piMeta = {
+                      sessionId: this.sessionManager.currentSessionId,
+                      provider: msg.provider,
+                      modelId: msg.model,
+                      responseModel: msg.responseModel,
+                      responseId: msg.responseId,
+                    };
+                  }
+                  break;
+                }
+                case "agent_end": {
+                  unsubscribe();
+                  cleanupAbortListener?.();
+                  piMeta.durationMs = Date.now() - startTime;
 
-        session
-          .prompt(promptText, { expandPromptTemplates: false })
-          .catch((error: unknown) => {
-            this.handlePromptError(
-              error,
-              unsubscribe,
-              cleanupAbortListener,
-              (mapped) => reject(mapped),
-            );
+                  const content: LanguageModelV3Content[] = [];
+                  for (const t of thinking) {
+                    content.push({ type: "reasoning", text: t });
+                  }
+                  if (text) {
+                    content.push({ type: "text", text });
+                  }
+                  for (const tc of toolCalls) {
+                    content.push({
+                      type: "tool-call",
+                      toolCallId: tc.toolCallId,
+                      toolName: tc.toolName,
+                      input: tc.input,
+                    });
+                  }
+
+                  resolve({
+                    content,
+                    finishReason,
+                    usage,
+                    warnings: allWarnings,
+                    response: {
+                      id: this.sessionManager.currentSessionId ?? generateId(),
+                      timestamp: new Date(),
+                      modelId: this.modelId,
+                    },
+                    request: { body: { prompt: promptText } },
+                    providerMetadata: toProviderMetadata(piMeta),
+                  });
+                  break;
+                }
+              }
+            } catch (error) {
+              unsubscribe();
+              cleanupAbortListener?.();
+              try {
+                reject(
+                  handlePiError(error, {
+                    provider: this.model.provider,
+                    modelId: this.model.id,
+                    sessionId: this.sessionManager.currentSessionId,
+                  }),
+                );
+              } catch (mapped) {
+                reject(mapped);
+              }
+            }
           });
+
+          session
+            .prompt(promptText, { expandPromptTemplates: false })
+            .catch((error: unknown) => {
+              this.handlePromptError(
+                error,
+                unsubscribe,
+                cleanupAbortListener,
+                (mapped) => reject(mapped),
+              );
+            });
+        });
       });
     } catch (error) {
       this.sessionManager.invalidateSession();
@@ -441,15 +431,6 @@ export class PiLanguageModel implements LanguageModelV3 {
         conversionWarnings,
       );
       const session = await this.ensureSession();
-
-      // Pass system prompt to Pi session if provided
-      if (context.systemPrompt) {
-        session.agent.state.systemPrompt = context.systemPrompt;
-      }
-      // Seed prior conversation history into session
-      this.seedSessionHistory(session, context);
-
-      // Create stream mapper context (mutable state carried across invocations)
       const streamCtx: StreamMapperContext = {
         activeTextPartId: undefined,
         activeReasoningPartId: undefined,
@@ -459,36 +440,88 @@ export class PiLanguageModel implements LanguageModelV3 {
         finishReason: { unified: "stop", raw: undefined },
         generateId,
         sessionId: this.sessionManager.currentSessionId,
+        modelId: this.modelId,
         startTime,
         maxToolResultSize:
           this.settings.maxToolResultSize ?? MAX_TOOL_RESULT_SIZE,
         toProviderMetadata,
       };
       let cleanupAbortListener: (() => void) | undefined;
-
       const stream = new ReadableStream<LanguageModelV3StreamPart>({
         start: (controller) => {
           if (allWarnings.length > 0) {
             controller.enqueue({ type: "stream-start", warnings: allWarnings });
           }
 
-          const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
-            try {
-              const parts = mapPiEventToStreamParts(event, streamCtx);
-              for (const part of parts) {
-                controller.enqueue(part);
+          // Wrap session setup + subscribe + prompt in the per-session
+          // serialization queue so concurrent doStream/doGenerate calls on
+          // the same model never issue overlapping session.prompt()
+          // invocations. The queue is held until prompt() resolves (i.e.
+          // the turn completes), so a queued call's prompt waits for the
+          // in-flight turn to finish.
+          this.sessionManager
+            .runSerialized((ses) => {
+              // Pass system prompt to Pi session if provided
+              if (context.systemPrompt) {
+                ses.agent.state.systemPrompt = context.systemPrompt;
               }
+              // Seed prior conversation history into session
+              this.seedSessionHistory(ses, context);
 
+              const unsubscribe = ses.subscribe((event: AgentSessionEvent) => {
+                try {
+                  const parts = mapPiEventToStreamParts(event, streamCtx);
+                  for (const part of parts) {
+                    controller.enqueue(part);
+                  }
               // Handle agent_end: close controller and clean up
-              if (event.type === "agent_end") {
-                controller.close();
-                cleanupAbortListener?.();
-                unsubscribe();
-              }
-            } catch (error) {
-              this.logger.error(`Error processing Pi event: ${error}`);
-              cleanupAbortListener?.();
-              unsubscribe();
+                  if (event.type === "agent_end") {
+                    controller.close();
+                    cleanupAbortListener?.();
+                    unsubscribe();
+                  }
+                } catch (error) {
+                  this.logger.error(`Error processing Pi event: ${error}`);
+                  cleanupAbortListener?.();
+                  unsubscribe();
+                  try {
+                    controller.error(
+                      handlePiError(error, {
+                        provider: this.model.provider,
+                        modelId: this.model.id,
+                        sessionId: this.sessionManager.currentSessionId,
+                      }),
+                    );
+                  } catch {
+                    /* controller may already be closed */
+                  }
+                }
+              });
+          cleanupAbortListener = this.setupAbortHandler(
+                options.abortSignal,
+                ses,
+              );
+
+              return ses
+                .prompt(promptText, { expandPromptTemplates: false })
+                .catch((error: unknown) => {
+                  this.handlePromptError(
+                    error,
+                    unsubscribe,
+                    cleanupAbortListener,
+                    (mapped) => {
+                      try {
+                        controller.error(mapped);
+                      } catch {
+                        /* controller may already be closed */
+                      }
+                    },
+                  );
+                });
+            })
+            .catch((error: unknown) => {
+              // runSerialized rejects only if the callback throws before
+              // returning the prompt promise (e.g. subscribe setup failure).
               try {
                 controller.error(
                   handlePiError(error, {
@@ -500,29 +533,6 @@ export class PiLanguageModel implements LanguageModelV3 {
               } catch {
                 /* controller may already be closed */
               }
-            }
-          });
-
-          cleanupAbortListener = this.setupAbortHandler(
-            options.abortSignal,
-            session,
-          );
-
-          session
-            .prompt(promptText, { expandPromptTemplates: false })
-            .catch((error: unknown) => {
-              this.handlePromptError(
-                error,
-                unsubscribe,
-                cleanupAbortListener,
-                (mapped) => {
-                  try {
-                    controller.error(mapped);
-                  } catch {
-                    /* controller may already be closed */
-                  }
-                },
-              );
             });
         },
 
@@ -582,12 +592,12 @@ export class PiLanguageModel implements LanguageModelV3 {
     }
     if (options.seed !== undefined) {
       unsupportedParams.push("seed");
+    }
     if (options.tools && options.tools.length > 0) {
       unsupportedParams.push("tools");
     }
     if (options.toolChoice !== undefined) {
       unsupportedParams.push("toolChoice");
-    }
     }
 
     for (const param of unsupportedParams) {

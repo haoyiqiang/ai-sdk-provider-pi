@@ -86,26 +86,49 @@ export class PiSessionManager {
    *
    * Serializes concurrent calls so that only one session creation happens
    * at a time. Subsequent callers receive the already-created session.
+   *
+   * Note: this only serializes session *creation*. To serialize a full
+   * critical section that includes `session.prompt()`, use
+   * {@link runSerialized} instead — otherwise concurrent calls would issue
+   * overlapping `prompt()` invocations on the same session.
    */
   async ensureSession(): Promise<AgentSession> {
-    // Chain onto the serialization queue
+    return this.runSerialized((session) => Promise.resolve(session));
+  }
+
+  /**
+   * Runs an async critical section under the per-session serialization queue.
+   *
+   * The callback receives a session that is guaranteed to exist for the
+   * duration of the section. Concurrent calls to `runSerialized` on the
+   * same session execute strictly in arrival order; calls against
+   * different sessions (different managers) run in parallel.
+   *
+   * This is the boundary that makes `session.prompt()` safe under
+   * concurrency: both `doGenerate` and `doStream` wrap their
+   * subscribe → prompt → resolve cycle in `runSerialized` so a second
+   * prompt never starts before the first turn completes.
+   *
+   * Rejections are swallowed for queue continuity (the queue stays
+   * alive), but propagated to the caller.
+   */
+  runSerialized<T>(
+    fn: (session: AgentSession) => Promise<T>,
+  ): Promise<T> {
     const task = this.#queueTail.then(async () => {
       if (this.disposed) {
         this.disposed = false; // Reset so a new session can be created
         this.logger.info("Creating new session after dispose()");
       }
-      if (this.session) {
-        return this.session;
-      }
-      return await this.#createSession();
+      const session = this.session ?? (await this.#createSession());
+      return fn(session);
     });
 
-    // Update queue tail — swallow rejections so queue stays alive
+    // Update queue tail — swallow rejections so the queue stays alive
     this.#queueTail = task.then(
       () => {},
       () => {},
     );
-
     return task;
   }
 

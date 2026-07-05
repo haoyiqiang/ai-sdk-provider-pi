@@ -5,6 +5,7 @@ import type {
 } from "@ai-sdk/provider";
 import type {
   AssistantMessageEvent,
+  Usage as PiUsage,
 } from "@earendil-works/pi-ai";
 import type {
   AgentSessionEvent,
@@ -12,6 +13,7 @@ import type {
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createEmptyUsage,
+  extractUsage,
   mapPiEventToStreamParts,
   MAX_TOOL_RESULT_SIZE,
   toProviderMetadata,
@@ -32,6 +34,7 @@ function createCtx(overrides?: Partial<StreamMapperContext>): StreamMapperContex
     finishReason: { unified: "stop", raw: undefined },
     generateId: () => `id-${Math.random().toString(36).slice(2, 8)}`,
     sessionId: "test-session",
+    modelId: "test-model",
     startTime: Date.now(),
     maxToolResultSize: MAX_TOOL_RESULT_SIZE,
     toProviderMetadata,
@@ -95,7 +98,7 @@ describe("mapPiEventToStreamParts", () => {
       const meta = parts[0] as { type: "response-metadata"; id?: string; timestamp?: Date; modelId?: string };
       expect(meta.id).toBe("test-session");
       expect(meta.timestamp).toBeInstanceOf(Date);
-      expect(meta.modelId).toBeUndefined();
+      expect(meta.modelId).toBe("test-model");
     });
 
     it("falls back to generated ID when sessionId is undefined", () => {
@@ -1216,6 +1219,77 @@ describe("mapPiEventToStreamParts", () => {
 
       expect(ctx.activeReasoningPartId).toBeUndefined();
     });
+  });
+});
+
+// ─── extractUsage ───
+
+describe("extractUsage", () => {
+  const baseUsage: PiUsage = {
+    input: 100,
+    output: 50,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 150,
+    cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 },
+  };
+
+  it("computes noCache = input when cacheRead is 0", () => {
+    const result = extractUsage(baseUsage);
+    expect(result.inputTokens.noCache).toBe(100);
+  });
+
+  it("computes noCache = input - cacheRead when cacheRead > 0", () => {
+    const result = extractUsage({
+      ...baseUsage,
+      input: 100,
+      cacheRead: 30,
+      cacheWrite: 5,
+    });
+    expect(result.inputTokens.noCache).toBe(70);
+    expect(result.inputTokens.cacheRead).toBe(30);
+    expect(result.inputTokens.cacheWrite).toBe(5);
+  });
+
+  it("guards against negative noCache", () => {
+    const result = extractUsage({
+      ...baseUsage,
+      input: 10,
+      cacheRead: 50,
+    });
+    expect(result.inputTokens.noCache).toBe(0);
+  });
+
+  it("populates outputTokens.text = output", () => {
+    const result = extractUsage(baseUsage);
+    expect(result.outputTokens.text).toBe(50);
+    expect(result.outputTokens.total).toBe(50);
+  });
+
+  it("normalizes raw to a stable shape", () => {
+    const result = extractUsage(baseUsage);
+    const raw = result.raw as unknown as Record<string, unknown>;
+    expect(raw.input).toBe(100);
+    expect(raw.output).toBe(50);
+    expect(raw.cacheRead).toBe(0);
+    expect(raw.cacheWrite).toBe(0);
+    expect(raw.totalTokens).toBe(150);
+    expect(raw.cost).toEqual({ input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 });
+  });
+
+  it("handles zero usage", () => {
+    const result = extractUsage({
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    });
+    expect(result.inputTokens.total).toBe(0);
+    expect(result.outputTokens.total).toBe(0);
+    expect(result.inputTokens.noCache).toBe(0);
+    expect(result.outputTokens.text).toBe(0);
   });
 });
 

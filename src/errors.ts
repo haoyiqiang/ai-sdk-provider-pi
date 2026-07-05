@@ -1,10 +1,12 @@
 import { APICallError, LoadAPIKeyError } from "@ai-sdk/provider";
 import {
   getOverflowPatterns,
+  isContextOverflow,
 } from "@earendil-works/pi-ai";
 
-// Re-export pi-ai's isContextOverflow for use on AssistantMessage objects
-// in pi-language-model.ts (stream message_end events with stopReason "error").
+// Re-export pi-ai's isContextOverflow for consumers that inspect an
+// AssistantMessage directly (e.g. stream message_end events with
+// stopReason "error").
 export { isContextOverflow } from "@earendil-works/pi-ai";
 
 // ─── Retryable policy ───────────────────────────────────────────────
@@ -23,6 +25,7 @@ export const RETRYABLE_CODES = new Set([
   "ETIMEDOUT",
   "ESOCKETTIMEDOUT",
   "ECONNRESET",
+  "TRANSIENT",
   "ECONNREFUSED",
   "EAI_AGAIN",
 ]);
@@ -36,7 +39,7 @@ export const RETRYABLE_CODES = new Set([
  * - ENOTFOUND: DNS hard failure
  */
 export const NON_RETRYABLE_CODES = new Set([
-  "ABORT",
+  "ABORTED",
   "AUTH_FAILED",
   "CONTEXT_OVERFLOW",
   "ENOTFOUND",
@@ -141,19 +144,29 @@ export function createAPICallError({
 
 /**
  * Creates an authentication error for Pi SDK API key failures.
+ * Returns APICallError with code "AUTH_FAILED" so the stable code
+ * vocabulary (NON_RETRYABLE_CODES, isAuthenticationError) works consistently.
  */
 export function createAuthenticationError({
   message,
   provider,
+  modelId,
 }: {
   message: string;
   provider?: string;
-}): LoadAPIKeyError {
+  modelId?: string;
+}): APICallError {
   const providerHint = provider ? ` for provider "${provider}"` : "";
-  return new LoadAPIKeyError({
-    message:
-      message ||
-      `Pi authentication failed${providerHint}. Please ensure the API key is configured via auth.json, environment variable, or AuthStorage.setRuntimeApiKey().`,
+  const errorMessage =
+    message ||
+    `Pi authentication failed${providerHint}. Please ensure the API key is configured via auth.json, environment variable, or AuthStorage.setRuntimeApiKey().`;
+  return createAPICallError({
+    message: errorMessage,
+    code: "AUTH_FAILED",
+    provider,
+    modelId,
+    originalMessage: message,
+    isRetryable: false,
   });
 }
 
@@ -238,7 +251,7 @@ export function createAbortError({
     url: `pi://${provider ?? "unknown"}/${modelId ?? "unknown"}`,
     requestBodyValues: undefined,
     data: {
-      code: "ABORT",
+      code: "ABORTED",
       provider,
       modelId,
       sessionId,
@@ -413,16 +426,37 @@ export function handlePiError(
         });
       }
     }
+      // ── Structural context-overflow detection ──
+    // If the error carries an AssistantMessage (e.g. on a `response` or
+    // `assistantMessage` field), ask pi-ai's structural detector rather
+    // than relying on message text. This survives upstream wording changes.
+    const assistantMessageCandidate =
+      (err as unknown as { assistantMessage?: unknown }).assistantMessage ??
+      (err as unknown as { response?: unknown }).response ??
+      (err as unknown as { result?: unknown }).result;
+    if (
+      assistantMessageCandidate &&
+      typeof assistantMessageCandidate === "object" &&
+      isContextOverflow(assistantMessageCandidate as any)
+    ) {
+      throw createContextOverflowError({
+        message,
+        provider,
+        modelId,
+        promptExcerpt,
+      });
+    }
 
     // ── Message-based fallback ──
 
-    // Authentication errors
+    // Authentication errors (case-insensitive, long phrases only to avoid
+    // false positives like matching "auth" inside unrelated words)
+    const lowerMsg = message.toLowerCase();
     if (
-      message.includes("API key") ||
-      message.includes("authentication") ||
-      message.includes("Unauthorized") ||
-      message.includes("401") ||
-      message.includes("auth")
+      lowerMsg.includes("api key") ||
+      lowerMsg.includes("authentication failed") ||
+      lowerMsg.includes("unauthorized") ||
+      lowerMsg.includes("invalid api key")
     ) {
       throw createAuthenticationError({ message, provider });
     }
@@ -466,11 +500,26 @@ export function handlePiError(
       });
     }
 
-    // Rate limiting
-    if (message.includes("rate limit") || message.includes("429")) {
+    // Rate limiting / transient network (message-based fallback)
+    // Matches spec line 101: retryable on "rate limit", "temporarily
+    // unavailable", "connection reset", "ECONNRESET" message patterns.
+    const retryableMessagePatterns = [
+      "rate limit",
+      "429",
+      "temporarily unavailable",
+      "connection reset",
+      "econnreset",
+    ];
+    const matchedRetryable = retryableMessagePatterns.find((p) =>
+      lowerMsg.includes(p),
+    );
+    if (matchedRetryable) {
       throw createAPICallError({
         message,
-        code: "RATE_LIMIT",
+        code:
+          matchedRetryable === "rate limit" || matchedRetryable === "429"
+            ? "RATE_LIMIT"
+            : "TRANSIENT",
         provider,
         modelId,
         sessionId,
@@ -548,7 +597,7 @@ export function isContextOverflowError(error: unknown): boolean {
  */
 export function isAbortError(error: unknown): boolean {
   if (error instanceof APICallError) {
-    return (error.data as PiErrorMetadata)?.code === "ABORT";
+    return (error.data as PiErrorMetadata)?.code === "ABORTED";
   }
   return false;
 }

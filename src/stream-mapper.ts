@@ -13,6 +13,7 @@ import type {
   AgentSessionEvent,
 } from "@earendil-works/pi-coding-agent";
 import { mapPiFinishReason } from "./map-pi-finish-reason.js";
+import { mapPiToolCall, mapPiToolResult } from "./tool-mapper.js";
 import type {
   PiProviderMetadata,
   ToolStreamState,
@@ -49,6 +50,8 @@ export interface StreamMapperContext {
   generateId: () => string;
   /** Current Pi session ID, if available. */
   sessionId?: string;
+  /** Model ID for metadata parts (response-metadata, etc.). */
+  modelId?: string;
   /** Timestamp when the stream started (used for durationMs). */
   startTime: number;
   /** Maximum tool result size before truncation. */
@@ -94,22 +97,49 @@ export function createEmptyUsage(): LanguageModelV3Usage {
 }
 
 /**
- * Extracts usage from a Pi usage object.
+ * Completes the AI SDK v3 usage fields:
+ * - `inputTokens.noCache` = `max(input - cacheRead, 0)` when `cacheRead > 0`, else `input`.
+ * - `outputTokens.text` = `usage.output` (pi-ai does not separate text vs reasoning).
+ * - `raw` is normalized to a stable object shape
+ *   `{ input, output, cacheRead, cacheWrite, totalTokens, cost }` so downstream
+ *   tooling can rely on its keys rather than guessing the pi-ai shape.
  */
 export function extractUsage(piUsage: PiUsage): LanguageModelV3Usage {
+  const input = piUsage.input ?? undefined;
+  const output = piUsage.output ?? undefined;
+  const cacheRead = piUsage.cacheRead ?? undefined;
+  const cacheWrite = piUsage.cacheWrite ?? undefined;
+  const totalTokens = (piUsage as any).totalTokens ?? undefined;
+  const cost = (piUsage as any).cost ?? undefined;
+
+  // Uncached input tokens: when the provider reports cached reads, the
+  // portion of input that was NOT served from cache is input - cacheRead.
+  // Guard against negative values from inconsistent provider reporting.
+  const noCache =
+    cacheRead !== undefined && input !== undefined
+      ? Math.max(input - cacheRead, 0)
+      : input;
+
   return {
     inputTokens: {
-      total: piUsage.input ?? undefined,
-      noCache: undefined,
-      cacheRead: piUsage.cacheRead ?? undefined,
-      cacheWrite: piUsage.cacheWrite ?? undefined,
+      total: input,
+      noCache,
+      cacheRead,
+      cacheWrite,
     },
     outputTokens: {
-      total: piUsage.output ?? undefined,
-      text: undefined,
+      total: output,
+      text: output,
       reasoning: undefined,
     },
-    raw: piUsage as unknown as JSONObject,
+    raw: {
+      input,
+      output,
+      cacheRead,
+      cacheWrite,
+      totalTokens,
+      cost,
+    } as unknown as JSONObject,
   };
 }
 
@@ -280,7 +310,7 @@ export function mapPiEventToStreamParts(
             type: "response-metadata",
             id: ctx.sessionId ?? ctx.generateId(),
             timestamp: new Date(),
-            modelId: undefined,
+            modelId: ctx.modelId,
           });
           break;
         }
@@ -413,15 +443,13 @@ export function mapPiEventToStreamParts(
               type: "tool-input-end",
               id: toolCallId,
             });
-            parts.push({
-              type: "tool-call",
-              toolCallId,
-              toolName: msgEvent.toolCall.name,
-              input:
-                typeof msgEvent.toolCall.arguments === "string"
-                  ? msgEvent.toolCall.arguments
-                  : JSON.stringify(msgEvent.toolCall.arguments),
-            });
+            parts.push(
+              mapPiToolCall({
+                id: toolCallId,
+                name: msgEvent.toolCall.name,
+                arguments: msgEvent.toolCall.arguments,
+              }),
+            );
           }
           break;
         }
@@ -457,20 +485,17 @@ export function mapPiEventToStreamParts(
     }
 
     case "tool_execution_end": {
-      const resultText = truncateToolResult(
-        typeof event.result === "string"
-          ? event.result
-          : JSON.stringify(event.result ?? ""),
-        ctx.maxToolResultSize,
+      parts.push(
+        mapPiToolResult(
+          {
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            result: event.result,
+            isError: event.isError,
+          },
+          ctx.maxToolResultSize,
+        ),
       );
-      parts.push({
-        type: "tool-result",
-        toolCallId: event.toolCallId,
-        toolName: event.toolName,
-        result: resultText as any,
-        isError: event.isError || undefined,
-        dynamic: true,
-      });
       ctx.toolStates.delete(event.toolCallId);
       break;
     }

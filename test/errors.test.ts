@@ -1,4 +1,4 @@
-import { APICallError, LoadAPIKeyError } from "@ai-sdk/provider";
+import { APICallError } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
 import {
   createAPICallError,
@@ -56,12 +56,15 @@ describe("createAPICallError", () => {
 });
 
 describe("createAuthenticationError", () => {
-  it("creates a LoadAPIKeyError", () => {
+  it("creates an APICallError with AUTH_FAILED code", () => {
     const error = createAuthenticationError({
       message: "Invalid API key",
       provider: "anthropic",
     });
-    expect(error).toBeInstanceOf(LoadAPIKeyError);
+    expect(error).toBeInstanceOf(APICallError);
+    const data = (error as APICallError).data as any;
+    expect(data.code).toBe("AUTH_FAILED");
+    expect(error.isRetryable).toBe(false);
     expect(error.message).toContain("Invalid API key");
   });
 
@@ -115,11 +118,13 @@ describe("handlePiError", () => {
     expect(() => handlePiError(original)).toThrow(original);
   });
 
-  it("converts authentication errors to LoadAPIKeyError", () => {
+  it("converts authentication errors to APICallError with AUTH_FAILED code", () => {
     try {
       handlePiError(new Error("API key not found for anthropic"));
     } catch (e) {
-      expect(e).toBeInstanceOf(LoadAPIKeyError);
+      expect(e).toBeInstanceOf(APICallError);
+      const data = (e as APICallError).data as any;
+      expect(data.code).toBe("AUTH_FAILED");
       return;
     }
     expect.unreachable("Should have thrown");
@@ -129,17 +134,21 @@ describe("handlePiError", () => {
     try {
       handlePiError(new Error("Unauthorized access"), { provider: "openai" });
     } catch (e) {
-      expect(e).toBeInstanceOf(LoadAPIKeyError);
+      expect(e).toBeInstanceOf(APICallError);
+      const data = (e as APICallError).data as any;
+      expect(data.code).toBe("AUTH_FAILED");
       return;
     }
     expect.unreachable("Should have thrown");
   });
 
-  it('converts "401" to authentication error', () => {
+  it('converts "invalid api key" to authentication error', () => {
     try {
-      handlePiError(new Error("HTTP 401"));
+      handlePiError(new Error("invalid api key provided"));
     } catch (e) {
-      expect(e).toBeInstanceOf(LoadAPIKeyError);
+      expect(e).toBeInstanceOf(APICallError);
+      const data = (e as APICallError).data as any;
+      expect(data.code).toBe("AUTH_FAILED");
       return;
     }
     expect.unreachable("Should have thrown");
@@ -232,7 +241,7 @@ describe("handlePiError", () => {
 });
 
 describe("isAuthenticationError", () => {
-  it("returns true for LoadAPIKeyError", () => {
+  it("returns true for APICallError with AUTH_FAILED code", () => {
     const error = createAuthenticationError({ message: "Auth failed" });
     expect(isAuthenticationError(error)).toBe(true);
   });
@@ -291,7 +300,7 @@ describe("getErrorMetadata", () => {
 });
 
 describe("createAbortError", () => {
-  it("creates a non-retryable APICallError with ABORT code", () => {
+  it("creates a non-retryable APICallError with ABORTED code", () => {
     const error = createAbortError({
       message: "The operation was aborted.",
       provider: "anthropic",
@@ -301,7 +310,7 @@ describe("createAbortError", () => {
     expect(error).toBeInstanceOf(APICallError);
     expect(error.isRetryable).toBe(false);
     const data = error.data as any;
-    expect(data.code).toBe("ABORT");
+    expect(data.code).toBe("ABORTED");
     expect(data.provider).toBe("anthropic");
     expect(data.modelId).toBe("claude-sonnet-4");
     expect(data.sessionId).toBe("sess_123");
@@ -341,7 +350,7 @@ describe("RETRYABLE_CODES and NON_RETRYABLE_CODES", () => {
   });
 
   it("NON_RETRYABLE_CODES contains expected values", () => {
-    expect(NON_RETRYABLE_CODES.has("ABORT")).toBe(true);
+    expect(NON_RETRYABLE_CODES.has("ABORTED")).toBe(true);
     expect(NON_RETRYABLE_CODES.has("AUTH_FAILED")).toBe(true);
     expect(NON_RETRYABLE_CODES.has("CONTEXT_OVERFLOW")).toBe(true);
     expect(NON_RETRYABLE_CODES.has("ENOTFOUND")).toBe(true);
@@ -433,7 +442,9 @@ describe("handlePiError — structural classification", () => {
       try {
         handlePiError(err, { provider: "anthropic" });
       } catch (e) {
-        expect(e).toBeInstanceOf(LoadAPIKeyError);
+        expect(e).toBeInstanceOf(APICallError);
+        const data = (e as APICallError).data as any;
+        expect(data.code).toBe("AUTH_FAILED");
         return;
       }
       expect.unreachable("Should have thrown");
@@ -446,7 +457,9 @@ describe("handlePiError — structural classification", () => {
       try {
         handlePiError(err);
       } catch (e) {
-        expect(e).toBeInstanceOf(LoadAPIKeyError);
+        expect(e).toBeInstanceOf(APICallError);
+        const data = (e as APICallError).data as any;
+        expect(data.code).toBe("AUTH_FAILED");
         return;
       }
       expect.unreachable("Should have thrown");
