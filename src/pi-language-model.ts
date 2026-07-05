@@ -430,7 +430,7 @@ export class PiLanguageModel implements LanguageModelV3 {
         promptText,
         conversionWarnings,
       );
-      const session = await this.ensureSession();
+      // Session is created lazily inside runSerialized; no need to eagerly acquire it here.
       const streamCtx: StreamMapperContext = {
         activeTextPartId: undefined,
         activeReasoningPartId: undefined,
@@ -539,11 +539,14 @@ export class PiLanguageModel implements LanguageModelV3 {
         cancel: () => {
           this.logger.info("Stream cancelled by consumer");
           cleanupAbortListener?.();
-          session
-            .abort()
-            .catch((err: unknown) =>
-              this.logger.error(`Abort error on cancel: ${err}`),
-            );
+          const currentSession = this.sessionManager.currentSession;
+          if (currentSession) {
+            currentSession
+              .abort()
+              .catch((err: unknown) =>
+                this.logger.error(`Abort error on cancel: ${err}`),
+              );
+          }
         },
       });
 
