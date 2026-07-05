@@ -118,9 +118,19 @@ export class PiLanguageModel implements LanguageModelV3 {
     if (providerSettings.logger) {
       return providerSettings.logger;
     }
+    // When verbose, all log levels pass through
+    if (providerSettings.verbose) {
+      return {
+        debug: (msg: string) => console.debug(`[pi] ${msg}`),
+        info: (msg: string) => console.info(`[pi] ${msg}`),
+        warn: (msg: string) => console.warn(`[pi] ${msg}`),
+        error: (msg: string) => console.error(`[pi] ${msg}`),
+      };
+    }
+    // When not verbose (default), only warn/error pass through
     return {
-      debug: (msg: string) => console.debug(`[pi] ${msg}`),
-      info: (msg: string) => console.info(`[pi] ${msg}`),
+      debug: () => {},
+      info: () => {},
       warn: (msg: string) => console.warn(`[pi] ${msg}`),
       error: (msg: string) => console.error(`[pi] ${msg}`),
     };
