@@ -7,6 +7,7 @@ on:
     branches: [master, main]
 
 jobs:
+  # ── 检查 & 测试 ──
   ci:
     runs-on: ubuntu-latest
     strategy:
@@ -44,3 +45,35 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  # ── 发布到 npm ──
+  publish:
+    needs: ci
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish to npm
+        run: pnpm publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
