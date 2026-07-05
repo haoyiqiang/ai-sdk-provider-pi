@@ -835,6 +835,203 @@ describe("PiLanguageModel", () => {
     });
   });
 
+  describe("conversation history seeding", () => {
+    let mockSession: ReturnType<typeof createMockSession>;
+
+    beforeEach(() => {
+      mockSession = createMockSession();
+      piCodingAgent.__setMockSession(mockSession.session);
+    });
+
+    it("seeds prior messages into session for multi-turn conversation", async () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const generatePromise = model.doGenerate({
+        prompt: [
+          { role: "user", content: "Hello" },
+          { role: "assistant", content: "Hi! How can I help?" },
+          { role: "user", content: "What\u2019s your name?" },
+        ],
+      });
+
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+
+      // Verify prior messages were seeded
+      const stateMessages = (mockSession.session.agent.state as any).messages;
+      expect(stateMessages).toHaveLength(2);
+      expect(stateMessages[0].role).toBe("user");
+      expect(stateMessages[1].role).toBe("assistant");
+
+      // Verify the last user message is the prompt text
+      expect(mockSession.promptCalls[0].text).toBe("What\u2019s your name?");
+
+      // Complete the test
+      mockSession.emitEvent({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+
+      mockSession.resolvePrompt();
+
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
+
+      await generatePromise;
+    });
+
+    it("does not seed messages when there is only a single user message", async () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const generatePromise = model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
+      });
+
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+
+      // Verify no prior messages were seeded
+      const stateMessages = (mockSession.session.agent.state as any).messages;
+      expect(stateMessages).toHaveLength(0);
+
+      // Verify the prompt text is correct
+      expect(mockSession.promptCalls[0].text).toBe("Hello");
+
+      // Complete the test
+      mockSession.emitEvent({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+
+      mockSession.resolvePrompt();
+
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
+
+      await generatePromise;
+    });
+
+    it("seeds history with system prompt + multi-turn in doStream", async () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const { stream: rawStream } = await model.doStream({
+        prompt: [
+          { role: "system", content: "You are a helpful assistant." },
+          { role: "user", content: "First question" },
+          { role: "assistant", content: "First answer" },
+          { role: "user", content: "Second question" },
+        ],
+      });
+
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+
+      // Verify system prompt was passed
+      expect(mockSession.session.agent.state.systemPrompt).toBe(
+        "You are a helpful assistant.",
+      );
+
+      // Verify prior messages were seeded (first user + assistant, not the last user)
+      const stateMessages = (mockSession.session.agent.state as any).messages;
+      expect(stateMessages).toHaveLength(2);
+      expect(stateMessages[0].role).toBe("user");
+      expect(stateMessages[1].role).toBe("assistant");
+
+      // Verify prompt text is the last user message
+      expect(mockSession.promptCalls[0].text).toBe("Second question");
+
+      // Complete the stream
+      mockSession.emitEvent({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+          usage: {
+            input: 10,
+            output: 5,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 15,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+
+      mockSession.resolvePrompt();
+
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
+
+      // Read stream to completion
+      const reader = rawStream.getReader();
+      const parts: any[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+      }
+
+      expect(parts.some((p: any) => p.type === "finish")).toBe(true);
+    });
+  });
   describe("dispose", () => {
     let mockSession: ReturnType<typeof createMockSession>;
 
