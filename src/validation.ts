@@ -1,5 +1,5 @@
-import type { Model, Api } from '@earendil-works/pi-ai';
-import type { PiProviderSettings, PiLanguageModelSettings } from './types.js';
+import type { Api, Model } from "@earendil-works/pi-ai";
+import type { PiLanguageModelSettings, PiProviderSettings } from "./types.js";
 
 /**
  * Validates and parses a Pi model ID string.
@@ -15,13 +15,13 @@ export function parseModelId(modelId: string): {
   provider: string;
   modelId: string;
 } {
-  if (!modelId || modelId.trim() === '') {
-    throw new Error('Model ID cannot be empty');
+  if (!modelId || modelId.trim() === "") {
+    throw new Error("Model ID cannot be empty");
   }
 
   // Check if it's a provider/model format
-  if (modelId.includes('/')) {
-    const parts = modelId.split('/');
+  if (modelId.includes("/")) {
+    const parts = modelId.split("/");
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
       throw new Error(
         `Invalid model ID format: '${modelId}'. Expected format: 'provider/model-id' (e.g., 'anthropic/claude-sonnet-4')`
@@ -32,19 +32,19 @@ export function parseModelId(modelId: string): {
 
   // Convenience aliases for common models
   const aliases: Record<string, { provider: string; modelId: string }> = {
-    'sonnet': { provider: 'anthropic', modelId: 'claude-sonnet-4' },
-    'opus': { provider: 'anthropic', modelId: 'claude-opus-4' },
-    'haiku': { provider: 'anthropic', modelId: 'claude-haiku-4' },
-    'gpt-4o': { provider: 'openai', modelId: 'gpt-4o' },
-    'gpt-4o-mini': { provider: 'openai', modelId: 'gpt-4o-mini' },
-    'o3': { provider: 'openai', modelId: 'o3' },
-    'o4-mini': { provider: 'openai', modelId: 'o4-mini' },
-    'gemini-2.5-pro': { provider: 'google', modelId: 'gemini-2.5-pro' },
-    'gemini-2.5-flash': { provider: 'google', modelId: 'gemini-2.5-flash' },
-    'deepseek-v4-flash': { provider: 'deepseek', modelId: 'deepseek-v4-flash' },
-    'deepseek-v4-pro': { provider: 'deepseek', modelId: 'deepseek-v4-pro' },
-    'deepseek-chat': { provider: 'deepseek', modelId: 'deepseek-v4-flash' },
-    'deepseek-reasoner': { provider: 'deepseek', modelId: 'deepseek-v4-pro' },
+    sonnet: { provider: "anthropic", modelId: "claude-sonnet-4" },
+    opus: { provider: "anthropic", modelId: "claude-opus-4" },
+    haiku: { provider: "anthropic", modelId: "claude-haiku-4" },
+    "gpt-4o": { provider: "openai", modelId: "gpt-4o" },
+    "gpt-4o-mini": { provider: "openai", modelId: "gpt-4o-mini" },
+    o3: { provider: "openai", modelId: "o3" },
+    "o4-mini": { provider: "openai", modelId: "o4-mini" },
+    "gemini-2.5-pro": { provider: "google", modelId: "gemini-2.5-pro" },
+    "gemini-2.5-flash": { provider: "google", modelId: "gemini-2.5-flash" },
+    "deepseek-v4-flash": { provider: "deepseek", modelId: "deepseek-v4-flash" },
+    "deepseek-v4-pro": { provider: "deepseek", modelId: "deepseek-v4-pro" },
+    "deepseek-chat": { provider: "deepseek", modelId: "deepseek-v4-flash" },
+    "deepseek-reasoner": { provider: "deepseek", modelId: "deepseek-v4-pro" },
   };
 
   const alias = aliases[modelId.toLowerCase()];
@@ -53,21 +53,21 @@ export function parseModelId(modelId: string): {
   }
 
   throw new Error(
-    `Unknown model alias: '${modelId}'. Use the 'provider/model-id' format (e.g., 'anthropic/claude-sonnet-4') or a known alias: ${Object.keys(aliases).join(', ')}`
+    `Unknown model alias: '${modelId}'. Use the 'provider/model-id' format (e.g., 'anthropic/claude-sonnet-4') or a known alias: ${Object.keys(aliases).join(", ")}`
   );
 }
 
 /**
  * Validates Pi provider settings and returns warnings.
  */
-export function validateProviderSettings(
-  settings: PiProviderSettings
-): { warnings: string[] } {
+export function validateProviderSettings(settings: PiProviderSettings): {
+  warnings: string[];
+} {
   const warnings: string[] = [];
 
   // Warn about high turn limits
   if (settings.verbose) {
-    warnings.push('Verbose logging is enabled — this may impact performance');
+    warnings.push("Verbose logging is enabled — this may impact performance");
   }
 
   return { warnings };
@@ -76,9 +76,9 @@ export function validateProviderSettings(
 /**
  * Validates Pi language model settings and returns warnings.
  */
-export function validateModelSettings(
-  settings: PiLanguageModelSettings
-): { warnings: string[] } {
+export function validateModelSettings(settings: PiLanguageModelSettings): {
+  warnings: string[];
+} {
   const warnings: string[] = [];
 
   // Warn about high turn limits
@@ -91,7 +91,7 @@ export function validateModelSettings(
   // Warn about both tools and excludeTools
   if (settings.tools && settings.excludeTools) {
     warnings.push(
-      'Both tools and excludeTools are specified. The excludeTools filter will be applied after the tools whitelist.'
+      "Both tools and excludeTools are specified. The excludeTools filter will be applied after the tools whitelist."
     );
   }
 
@@ -109,7 +109,10 @@ export function validateModelSettings(
 export function validateModelAvailability(
   provider: string,
   modelId: string,
-  modelRegistry: { find: (provider: string, modelId: string) => Model<Api> | undefined; hasConfiguredAuth: (model: Model<Api>) => boolean }
+  modelRegistry: {
+    find: (provider: string, modelId: string) => Model<Api> | undefined;
+    hasConfiguredAuth: (model: Model<Api>) => boolean;
+  }
 ): { warnings: string[]; model: Model<Api> | undefined } {
   const warnings: string[] = [];
 

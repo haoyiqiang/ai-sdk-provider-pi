@@ -1,4 +1,4 @@
-import { APICallError, LoadAPIKeyError } from '@ai-sdk/provider';
+import { APICallError, LoadAPIKeyError } from "@ai-sdk/provider";
 
 /**
  * Metadata associated with Pi SDK errors.
@@ -66,7 +66,7 @@ export function createAPICallError({
   return new APICallError({
     message,
     isRetryable,
-    url: `pi://${provider ?? 'unknown'}/${modelId ?? 'unknown'}`,
+    url: `pi://${provider ?? "unknown"}/${modelId ?? "unknown"}`,
     requestBodyValues: promptExcerpt ? { prompt: promptExcerpt } : undefined,
     data: metadata,
   });
@@ -82,9 +82,7 @@ export function createAuthenticationError({
   message: string;
   provider?: string;
 }): LoadAPIKeyError {
-  const providerHint = provider
-    ? ` for provider "${provider}"`
-    : '';
+  const providerHint = provider ? ` for provider "${provider}"` : "";
   return new LoadAPIKeyError({
     message:
       message ||
@@ -109,7 +107,7 @@ export function createTimeoutError({
   timeoutMs?: number;
 }): APICallError {
   const metadata: PiErrorMetadata & { timeoutMs?: number } = {
-    code: 'TIMEOUT',
+    code: "TIMEOUT",
     provider,
     modelId,
     promptExcerpt,
@@ -118,9 +116,9 @@ export function createTimeoutError({
   return new APICallError({
     message,
     isRetryable: true,
-    url: `pi://${provider ?? 'unknown'}/${modelId ?? 'unknown'}`,
+    url: `pi://${provider ?? "unknown"}/${modelId ?? "unknown"}`,
     requestBodyValues: promptExcerpt ? { prompt: promptExcerpt } : undefined,
-    data: timeoutMs !== undefined ? { ...metadata, timeoutMs } : metadata,
+    data: timeoutMs === undefined ? metadata : { ...metadata, timeoutMs },
   });
 }
 
@@ -141,10 +139,10 @@ export function createContextOverflowError({
   return new APICallError({
     message,
     isRetryable: false,
-    url: `pi://${provider ?? 'unknown'}/${modelId ?? 'unknown'}`,
+    url: `pi://${provider ?? "unknown"}/${modelId ?? "unknown"}`,
     requestBodyValues: promptExcerpt ? { prompt: promptExcerpt } : undefined,
     data: {
-      code: 'CONTEXT_OVERFLOW',
+      code: "CONTEXT_OVERFLOW",
       provider,
       modelId,
       promptExcerpt,
@@ -180,21 +178,21 @@ export function handlePiError(
 
     // Authentication errors
     if (
-      message.includes('API key') ||
-      message.includes('authentication') ||
-      message.includes('Unauthorized') ||
-      message.includes('401') ||
-      message.includes('auth')
+      message.includes("API key") ||
+      message.includes("authentication") ||
+      message.includes("Unauthorized") ||
+      message.includes("401") ||
+      message.includes("auth")
     ) {
       throw createAuthenticationError({ message, provider });
     }
 
     // Context overflow
     if (
-      message.includes('context') ||
-      message.includes('token limit') ||
-      message.includes('too many tokens') ||
-      message.includes('prompt is too long')
+      message.includes("context") ||
+      message.includes("token limit") ||
+      message.includes("too many tokens") ||
+      message.includes("prompt is too long")
     ) {
       throw createContextOverflowError({
         message,
@@ -206,9 +204,9 @@ export function handlePiError(
 
     // Timeout
     if (
-      message.includes('timeout') ||
-      message.includes('timed out') ||
-      message.includes('ETIMEDOUT')
+      message.includes("timeout") ||
+      message.includes("timed out") ||
+      message.includes("ETIMEDOUT")
     ) {
       throw createTimeoutError({
         message,
@@ -219,10 +217,10 @@ export function handlePiError(
     }
 
     // Rate limiting
-    if (message.includes('rate limit') || message.includes('429')) {
+    if (message.includes("rate limit") || message.includes("429")) {
       throw createAPICallError({
         message,
-        code: 'RATE_LIMIT',
+        code: "RATE_LIMIT",
         provider,
         modelId,
         sessionId,
@@ -247,7 +245,7 @@ export function handlePiError(
   // Non-Error throwables
   throw createAPICallError({
     message: String(error),
-    code: 'UNKNOWN',
+    code: "UNKNOWN",
     provider,
     modelId,
     sessionId,
@@ -260,10 +258,12 @@ export function handlePiError(
  * Checks if an error is an authentication error.
  */
 export function isAuthenticationError(error: unknown): boolean {
-  if (error instanceof LoadAPIKeyError) return true;
+  if (error instanceof LoadAPIKeyError) {
+    return true;
+  }
   if (error instanceof APICallError) {
     const data = error.data as PiErrorMetadata | undefined;
-    return data?.code === 'AUTH_FAILED' || data?.code === '401';
+    return data?.code === "AUTH_FAILED" || data?.code === "401";
   }
   return false;
 }
@@ -273,7 +273,7 @@ export function isAuthenticationError(error: unknown): boolean {
  */
 export function isTimeoutError(error: unknown): boolean {
   if (error instanceof APICallError) {
-    return (error.data as PiErrorMetadata)?.code === 'TIMEOUT';
+    return (error.data as PiErrorMetadata)?.code === "TIMEOUT";
   }
   return false;
 }
@@ -283,7 +283,7 @@ export function isTimeoutError(error: unknown): boolean {
  */
 export function isContextOverflowError(error: unknown): boolean {
   if (error instanceof APICallError) {
-    return (error.data as PiErrorMetadata)?.code === 'CONTEXT_OVERFLOW';
+    return (error.data as PiErrorMetadata)?.code === "CONTEXT_OVERFLOW";
   }
   return false;
 }

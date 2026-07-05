@@ -1,16 +1,20 @@
-import type { LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
-import { NoSuchModelError } from '@ai-sdk/provider';
-import type { Model, Api } from '@earendil-works/pi-ai';
-import { getModel } from '@earendil-works/pi-ai';
-import { AuthStorage, ModelRegistry, SessionManager } from '@earendil-works/pi-coding-agent';
-import { PiLanguageModel } from './pi-language-model.js';
-import type { PiProviderSettings, PiLanguageModelSettings, PiModelId } from './types.js';
+import type { LanguageModelV3, ProviderV3 } from "@ai-sdk/provider";
+import { NoSuchModelError } from "@ai-sdk/provider";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import { getModel } from "@earendil-works/pi-ai";
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { PiLanguageModel } from "./pi-language-model.js";
+import type {
+  PiLanguageModelSettings,
+  PiModelId,
+  PiProviderSettings,
+} from "./types.js";
 import {
   parseModelId,
-  validateProviderSettings,
-  validateModelSettings,
   validateModelAvailability,
-} from './validation.js';
+  validateModelSettings,
+  validateProviderSettings,
+} from "./validation.js";
 
 /**
  * Pi provider interface that extends the AI SDK's ProviderV3.
@@ -55,7 +59,10 @@ export interface PiProvider extends ProviderV3 {
    * @param settings - Optional settings to configure the model
    * @returns A language model instance
    */
-  languageModel(modelId: PiModelId, settings?: PiLanguageModelSettings): LanguageModelV3;
+  languageModel(
+    modelId: PiModelId,
+    settings?: PiLanguageModelSettings
+  ): LanguageModelV3;
 
   /**
    * Alias for `languageModel()` to maintain compatibility with AI SDK patterns.
@@ -99,7 +106,8 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
 
   const getModelRegistry = (): ModelRegistry => {
     if (!modelRegistry) {
-      modelRegistry = options.modelRegistry ?? ModelRegistry.create(getAuthStorage());
+      modelRegistry =
+        options.modelRegistry ?? ModelRegistry.create(getAuthStorage());
     }
     return modelRegistry;
   };
@@ -129,7 +137,7 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
 
     throw new NoSuchModelError({
       modelId,
-      modelType: 'languageModel',
+      modelType: "languageModel",
     });
   };
 
@@ -176,9 +184,14 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
     });
   };
 
-  const provider = function (modelId: PiModelId, settings?: PiLanguageModelSettings) {
+  const provider = function (
+    modelId: PiModelId,
+    settings?: PiLanguageModelSettings
+  ) {
     if (new.target) {
-      throw new Error('The Pi model function cannot be called with the new keyword.');
+      throw new Error(
+        "The Pi model function cannot be called with the new keyword."
+      );
     }
 
     return createModel(modelId, settings);
@@ -186,19 +199,19 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
 
   provider.languageModel = createModel;
   provider.chat = createModel;
-  provider.specificationVersion = 'v3' as const;
+  provider.specificationVersion = "v3" as const;
 
   provider.embeddingModel = (modelId: string) => {
     throw new NoSuchModelError({
       modelId,
-      modelType: 'embeddingModel',
+      modelType: "embeddingModel",
     });
   };
 
   provider.imageModel = (modelId: string) => {
     throw new NoSuchModelError({
       modelId,
-      modelType: 'imageModel',
+      modelType: "imageModel",
     });
   };
 

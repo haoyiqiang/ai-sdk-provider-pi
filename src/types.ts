@@ -1,13 +1,18 @@
-import type { Model, Api, Provider, ModelThinkingLevel as PiThinkingLevel } from '@earendil-works/pi-ai';
+import type {
+  Api,
+  Model,
+  ModelThinkingLevel as PiThinkingLevel,
+  Provider,
+} from "@earendil-works/pi-ai";
 import type {
   AuthStorage,
-  ModelRegistry,
-  SessionManager,
   BashOperations,
-  ReadOperations,
-  WriteOperations,
   EditOperations,
-} from '@earendil-works/pi-coding-agent';
+  ModelRegistry,
+  ReadOperations,
+  SessionManager,
+  WriteOperations,
+} from "@earendil-works/pi-coding-agent";
 
 /**
  * Tool operations interfaces are re-exported from the upstream Pi Coding Agent
@@ -16,10 +21,10 @@ import type {
  */
 export type {
   BashOperations,
+  EditOperations,
   ReadOperations,
   WriteOperations,
-  EditOperations,
-} from '@earendil-works/pi-coding-agent';
+} from "@earendil-works/pi-coding-agent";
 
 /**
  * Model identifier format for Pi provider.
@@ -47,7 +52,7 @@ export interface SandboxConfig {
    * - 'custom': use the operations provided via `operations`, falling back
    *   to local defaults for any tool not supplied.
    */
-  mode?: 'local' | 'custom';
+  mode?: "local" | "custom";
   /**
    * Working directory for sandboxed tool execution.
    * Defaults to the model/provider cwd or `process.cwd()`.
@@ -113,7 +118,7 @@ export interface PiProviderSettings {
   /**
    * Suppress all tools. "all" removes everything, "builtin" keeps only custom tools.
    */
-  noTools?: 'all' | 'builtin';
+  noTools?: "all" | "builtin";
 
   /**
    * Custom tools to register.
