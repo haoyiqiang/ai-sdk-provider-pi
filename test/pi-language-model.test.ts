@@ -1427,4 +1427,114 @@ describe("PiLanguageModel", () => {
       expect(usage.outputTokens.total).toBeUndefined();
     });
   });
+
+  describe("extractUsage", () => {
+    it("computes noCache = input when cacheRead is 0", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const piUsage = {
+        input: 100,
+        output: 50,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 150,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      };
+      const usage = (model as any).extractUsage(piUsage);
+      expect(usage.inputTokens.noCache).toBe(100);
+    });
+
+    it("computes noCache = input - cacheRead when cacheRead > 0 and input > cacheRead", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const piUsage = {
+        input: 100,
+        output: 50,
+        cacheRead: 30,
+        cacheWrite: 10,
+        totalTokens: 150,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      };
+      const usage = (model as any).extractUsage(piUsage);
+      expect(usage.inputTokens.noCache).toBe(70);
+    });
+
+    it("computes noCache = undefined when cacheRead >= input", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const piUsage = {
+        input: 100,
+        output: 50,
+        cacheRead: 100,
+        cacheWrite: 0,
+        totalTokens: 150,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      };
+      const usage = (model as any).extractUsage(piUsage);
+      // max(100-100, 0) = 0, and since 0 is not > 0, it becomes undefined
+      expect(usage.inputTokens.noCache).toBeUndefined();
+    });
+
+    it("populates outputTokens.text with usage.output", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const piUsage = {
+        input: 10,
+        output: 50,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 60,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      };
+      const usage = (model as any).extractUsage(piUsage);
+      expect(usage.outputTokens.text).toBe(50);
+    });
+
+    it("normalizes raw to a stable flat object without cost nesting", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const piUsage = {
+        input: 100,
+        output: 50,
+        cacheRead: 30,
+        cacheWrite: 10,
+        totalTokens: 150,
+        cost: { input: 0.3, output: 0.75, cacheRead: 0.1, cacheWrite: 0.2, total: 1.1 },
+      };
+      const usage = (model as any).extractUsage(piUsage);
+      expect(usage.raw).toEqual({
+        input: 100,
+        output: 50,
+        cacheRead: 30,
+        cacheWrite: 10,
+        totalTokens: 150,
+      });
+    });
+
+    it("computes noCache = undefined when input is 0", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const piUsage = {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      };
+      const usage = (model as any).extractUsage(piUsage);
+      expect(usage.inputTokens.noCache).toBeUndefined();
+    });
+
+    it("preserves existing inputTokens fields correctly", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const piUsage = {
+        input: 200,
+        output: 100,
+        cacheRead: 50,
+        cacheWrite: 20,
+        totalTokens: 300,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      };
+      const usage = (model as any).extractUsage(piUsage);
+      expect(usage.inputTokens.total).toBe(200);
+      expect(usage.inputTokens.cacheRead).toBe(50);
+      expect(usage.inputTokens.cacheWrite).toBe(20);
+      expect(usage.outputTokens.total).toBe(100);
+    });
+  });
 });
