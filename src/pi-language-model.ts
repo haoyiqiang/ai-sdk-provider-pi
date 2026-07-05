@@ -192,6 +192,43 @@ export class PiLanguageModel implements LanguageModelV3 {
   }
 
 
+  /**
+   * Seeds prior conversation history into the Pi session.
+   * All messages except the last user message (which becomes the prompt text)
+   * are placed in session.agent.state.messages so the agent has full context.
+   */
+  private seedSessionHistory(
+    session: AgentSession,
+    context: Context,
+  ): void {
+    // Find the index of the last user message
+    let lastUserIndex = -1;
+    for (let i = context.messages.length - 1; i >= 0; i--) {
+      if (context.messages[i].role === "user") {
+        lastUserIndex = i;
+        break;
+      }
+    }
+
+    // All messages except the last user message are "prior" history
+    let priorMessages: Message[];
+    if (lastUserIndex >= 0) {
+      priorMessages = [
+        ...context.messages.slice(0, lastUserIndex),
+        ...context.messages.slice(lastUserIndex + 1),
+      ];
+    } else {
+      priorMessages = [...context.messages];
+    }
+
+    if (priorMessages.length > 0) {
+      (session.agent.state as any).messages = priorMessages;
+      this.logger.debug(
+        `Seeded ${priorMessages.length} prior messages into session`,
+      );
+    }
+  }
+
   private async ensureSession(): Promise<AgentSession> {
     return this.sessionManager.ensureSession();
   }
@@ -224,6 +261,8 @@ export class PiLanguageModel implements LanguageModelV3 {
       if (context.systemPrompt) {
         session.agent.state.systemPrompt = context.systemPrompt;
       }
+      // Seed prior conversation history into session
+      this.seedSessionHistory(session, context);
 
       const cleanupAbortListener = this.setupAbortHandler(
         options.abortSignal,
@@ -392,6 +431,8 @@ export class PiLanguageModel implements LanguageModelV3 {
       if (context.systemPrompt) {
         session.agent.state.systemPrompt = context.systemPrompt;
       }
+      // Seed prior conversation history into session
+      this.seedSessionHistory(session, context);
 
       // Create stream mapper context (mutable state carried across invocations)
       const streamCtx: StreamMapperContext = {

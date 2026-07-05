@@ -28,6 +28,10 @@ export function convertToPiMessages(prompt: readonly ModelMessage[]): {
       case "system": {
         if (typeof message.content === "string") {
           systemPrompt = message.content;
+        } else {
+          warnings.push(
+            "System message with non-string content was ignored.",
+          );
         }
         break;
       }
@@ -39,7 +43,7 @@ export function convertToPiMessages(prompt: readonly ModelMessage[]): {
       }
 
       case "assistant": {
-        const piMessage = convertAssistantMessage(message);
+        const piMessage = convertAssistantMessage(message, warnings);
         if (piMessage) {
           messages.push(piMessage);
         }
@@ -129,6 +133,12 @@ function convertUserMessage(
         }
         break;
       }
+      default: {
+        warnings.push(
+          `Unrecognized user message part type '${(part as { type: string }).type}' was ignored.`,
+        );
+        break;
+      }
     }
   }
 
@@ -153,6 +163,7 @@ function convertUserMessage(
  */
 function convertAssistantMessage(
   message: ModelMessage & { role: "assistant" },
+  warnings: string[],
 ): AssistantMessage | null {
   const content: AssistantMessage["content"] = [];
 
@@ -190,11 +201,25 @@ function convertAssistantMessage(
           });
           break;
         }
+        default: {
+          warnings.push(
+            `Unrecognized assistant message part type '${(part as { type: string }).type}' was ignored.`,
+          );
+          break;
+        }
       }
     }
   }
 
   if (content.length === 0) {
+    if (
+      Array.isArray(message.content) &&
+      message.content.length > 0
+    ) {
+      warnings.push(
+        "Assistant message with content was dropped because no representable parts were found.",
+      );
+    }
     return null;
   }
 
