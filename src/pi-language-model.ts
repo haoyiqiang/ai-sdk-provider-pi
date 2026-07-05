@@ -18,17 +18,7 @@ import type {
   AgentSession,
   AgentSessionEvent,
 } from "@earendil-works/pi-coding-agent";
-import {
-  AuthStorage,
-  createAgentSession,
-  createBashToolDefinition,
-  createEditToolDefinition,
-  createLocalBashOperations,
-  createReadToolDefinition,
-  createWriteToolDefinition,
-  ModelRegistry,
-  SessionManager,
-} from "@earendil-works/pi-coding-agent";
+
 import {
   buildPromptFromContext,
   convertToPiMessages,
@@ -80,10 +70,8 @@ export class PiLanguageModel implements LanguageModelV3 {
   private readonly logger: Logger;
   private readonly settingsValidationWarnings: string[];
 
-  // Reused session for conversation continuity
-  private session: AgentSession | null = null;
-  private sessionId: string | undefined;
-  private disposed = false;
+  // Session manager handles creation, disposal, and serialized access
+  private readonly sessionManager: PiSessionManager;
 
 
   constructor(options: PiLanguageModelOptions) {
@@ -94,6 +82,13 @@ export class PiLanguageModel implements LanguageModelV3 {
     this.settingsValidationWarnings = options.settingsValidationWarnings ?? [];
 
     this.logger = this.resolveLogger(options.providerSettings);
+
+    this.sessionManager = new PiSessionManager({
+      logger: this.logger,
+      model: this.model,
+      settings: this.settings,
+      providerSettings: this.providerSettings,
+    });
 
     if (
       !this.modelId ||
@@ -137,38 +132,9 @@ export class PiLanguageModel implements LanguageModelV3 {
    * Safe to call multiple times.
    */
   dispose(): void {
-    if (this.disposed) {
-      return;
-    }
-    this.disposed = true;
-    if (this.session) {
-      try {
-        this.session.dispose();
-        this.logger.info(`Pi session disposed: ${this.sessionId}`);
-      } catch (error) {
-        this.logger.error(`Error disposing Pi session: ${error}`);
-      }
-      this.session = null;
-      this.sessionId = undefined;
-    }
+    this.sessionManager.dispose();
   }
 
-  /**
-   * Invalidates the current session without disposing the underlying Pi session.
-   * Used for error recovery — when a session.prompt() fails, we clear the local
-   * reference so the next call creates a fresh session automatically.
-   * Unlike dispose(), this does not call session.dispose() because the session
-   * may already be in a broken state.
-   */
-  private invalidateSession(): void {
-    if (this.session) {
-      this.logger.info(
-        `Invalidating Pi session after error: ${this.sessionId}`,
-      );
-      this.session = null;
-      this.sessionId = undefined;
-    }
-  }
 
   // ─── Shared Helpers ───
 
@@ -211,13 +177,13 @@ export class PiLanguageModel implements LanguageModelV3 {
   ): void {
     unsubscribe();
     cleanupAbort?.();
-    this.invalidateSession();
+    this.sessionManager.invalidateSession();
     try {
       onError(
         handlePiError(error, {
           provider: this.model.provider,
           modelId: this.model.id,
-          sessionId: this.sessionId,
+          sessionId: this.sessionManager.currentSessionId,
         }),
       );
     } catch (mapped) {
@@ -227,96 +193,7 @@ export class PiLanguageModel implements LanguageModelV3 {
 
 
   private async ensureSession(): Promise<AgentSession> {
-    if (this.disposed) {
-      this.disposed = false; // Reset so a new session can be created
-      this.logger.info("Creating new session after dispose()");
-    }
-    if (this.session) {
-      return this.session;
-    }
-    try {
-      const authStorage =
-        this.providerSettings.authStorage ?? AuthStorage.create();
-      const modelRegistry =
-        this.providerSettings.modelRegistry ??
-        ModelRegistry.create(authStorage);
-
-      // Resolve sandbox config (model-level overrides provider-level).
-      const sandbox: SandboxConfig | undefined =
-        this.settings.sandbox ?? this.providerSettings.sandbox;
-      const baseCwd =
-        sandbox?.cwd ??
-        this.settings.cwd ??
-        this.providerSettings.cwd ??
-        process.cwd();
-
-      // Build custom tool definitions whose execution backing is determined by
-      // the sandbox config. In 'local' mode the agent uses Pi's built-in local
-      // shell/filesystem operations (no override needed). In 'custom' mode each
-      // operation supplied via sandbox.operations replaces the corresponding
-      // built-in tool, with any missing operation falling back to local.
-      //
-      // When a sandbox config is present we replace all four built-in tools so
-      // the entire tool surface shares the same execution backend; otherwise
-      // we leave the built-in tools untouched and only honour provider/model
-      // customTools.
-      const customToolDefs: any[] = [];
-      const hasSandbox = sandbox !== undefined;
-      if (hasSandbox) {
-        const ops =
-          (sandbox?.mode === "custom" ? sandbox?.operations : undefined) ?? {};
-        customToolDefs.push(
-          createBashToolDefinition(baseCwd, {
-            operations: ops.bash ?? createLocalBashOperations(),
-          }),
-        );
-        if (ops.read) {
-          customToolDefs.push(
-            createReadToolDefinition(baseCwd, { operations: ops.read }),
-          );
-        }
-        if (ops.write) {
-          customToolDefs.push(
-            createWriteToolDefinition(baseCwd, { operations: ops.write }),
-          );
-        }
-        if (ops.edit) {
-          customToolDefs.push(
-            createEditToolDefinition(baseCwd, { operations: ops.edit }),
-          );
-        }
-      }
-
-      const allCustomTools = [
-        ...customToolDefs,
-        ...(this.providerSettings.customTools ?? []),
-      ] as any;
-      const result = await createAgentSession({
-        model: this.model,
-        authStorage,
-        modelRegistry,
-        sessionManager:
-          this.providerSettings.sessionManager ?? SessionManager.inMemory(),
-        cwd: baseCwd,
-        agentDir: this.providerSettings.agentDir,
-        tools: this.settings.tools ?? this.providerSettings.tools,
-        excludeTools:
-          this.settings.excludeTools ?? this.providerSettings.excludeTools,
-        noTools: hasSandbox ? "builtin" : this.providerSettings.noTools,
-        customTools: allCustomTools,
-        thinkingLevel: this.settings.thinkingLevel,
-      });
-
-      this.session = result.session;
-      this.sessionId = this.session.sessionId;
-      this.logger.info(`Pi session created: ${this.sessionId}`);
-      return this.session;
-    } catch (error) {
-      throw handlePiError(error, {
-        provider: this.model.provider,
-        modelId: this.model.id,
-      });
-    }
+    return this.sessionManager.ensureSession();
   }
 
   // ─── doGenerate ───
@@ -444,7 +321,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                   usage,
                   warnings: allWarnings,
                   response: {
-                    id: this.sessionId ?? generateId(),
+                    id: this.sessionManager.currentSessionId ?? generateId(),
                     timestamp: new Date(),
                     modelId: this.modelId,
                   },
@@ -462,7 +339,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                 handlePiError(error, {
                   provider: this.model.provider,
                   modelId: this.model.id,
-                  sessionId: this.sessionId,
+                  sessionId: this.sessionManager.currentSessionId,
                 }),
               );
             } catch (mapped) {
@@ -483,11 +360,11 @@ export class PiLanguageModel implements LanguageModelV3 {
           });
       });
     } catch (error) {
-      this.invalidateSession();
+      this.sessionManager.invalidateSession();
       throw handlePiError(error, {
         provider: this.model.provider,
         modelId: this.model.id,
-        sessionId: this.sessionId,
+        sessionId: this.sessionManager.currentSessionId,
       });
     }
   }
@@ -561,7 +438,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                   handlePiError(error, {
                     provider: this.model.provider,
                     modelId: this.model.id,
-                    sessionId: this.sessionId,
+                    sessionId: this.sessionManager.currentSessionId,
                   }),
                 );
               } catch {
@@ -609,11 +486,11 @@ export class PiLanguageModel implements LanguageModelV3 {
         request: { body: { prompt: promptText, model: this.modelId } },
       };
     } catch (error) {
-      this.invalidateSession();
+      this.sessionManager.invalidateSession();
       throw handlePiError(error, {
         provider: this.model.provider,
         modelId: this.model.id,
-        sessionId: this.sessionId,
+        sessionId: this.sessionManager.currentSessionId,
       });
     }
   }
