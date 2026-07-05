@@ -846,21 +846,19 @@ describe("PiLanguageModel", () => {
 
     it("calls session.dispose() and clears session", () => {
       const model = new PiLanguageModel(createModelOptions());
-
-      // Force session creation
-      (model as any).session = mockSession.session;
-      (model as any).sessionId = "test-session-123";
+      // Force session creation by setting internal state
+      (model as any).sessionManager.session = mockSession.session;
+      (model as any).sessionManager.sessionId = "test-session-123";
 
       model.dispose();
-
       expect(mockSession.disposeFn).toHaveBeenCalledOnce();
-      expect((model as any).session).toBeNull();
-      expect((model as any).sessionId).toBeUndefined();
+      expect((model as any).sessionManager.currentSession).toBeNull();
+      expect((model as any).sessionManager.currentSessionId).toBeUndefined();
     });
 
     it("is safe to call multiple times", () => {
       const model = new PiLanguageModel(createModelOptions());
-      (model as any).session = mockSession.session;
+      (model as any).sessionManager.session = mockSession.session;
       model.dispose();
       model.dispose();
       expect(mockSession.disposeFn).toHaveBeenCalledOnce();
@@ -993,8 +991,8 @@ describe("PiLanguageModel", () => {
       await expect(promise1).rejects.toThrow();
 
       // After invalidation, the old session should be cleared
-      expect((model as any).session).toBeNull();
-      expect((model as any).sessionId).toBeUndefined();
+      expect((model as any).sessionManager.currentSession).toBeNull();
+      expect((model as any).sessionManager.currentSessionId).toBeUndefined();
 
       // Create a new mock session for the second call
       const newMockSession = createMockSession();
@@ -1046,6 +1044,81 @@ describe("PiLanguageModel", () => {
 
       await promise2;
     });
+
+    it("serializes concurrent session creation (one createAgentSession call)", async () => {
+      const mockSession = createMockSession();
+      piCodingAgent.__setMockSession(mockSession.session);
+
+      // Reset call history so we count only calls during this test
+      piCodingAgent.createAgentSession.mockClear();
+
+      // Make createAgentSession return a deferred promise so we can control
+      // when it resolves.
+      let resolveDeferred: (value: { session: AgentSession }) => void;
+      piCodingAgent.createAgentSession.mockImplementationOnce(() => {
+        return new Promise((resolve) => {
+          resolveDeferred = resolve;
+        });
+      });
+
+      const model = new PiLanguageModel(createModelOptions());
+
+      // Fire two concurrent doGenerate calls
+      const promise1 = model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "First" }] }],
+      });
+
+      const promise2 = model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "Second" }] }],
+      });
+
+      // Both calls should be waiting on the serialization queue.
+      // createAgentSession must have been called exactly once.
+      await vi.waitFor(() => expect(piCodingAgent.createAgentSession).toHaveBeenCalledTimes(1));
+
+      // Resolve the deferred session creation
+      resolveDeferred!({ session: mockSession.session });
+
+      // Now both calls proceed: first one gets the session from ensureSession,
+      // second one sees it already exists and reuses it.
+      // Wait for both prompt calls
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(2));
+
+      // createAgentSession must still have been called exactly once
+      expect(piCodingAgent.createAgentSession).toHaveBeenCalledTimes(1);
+
+      // Clean up both calls
+      mockSession.emitEvent({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+
+      mockSession.resolvePrompt();
+      mockSession.emitEvent({ type: "agent_end", messages: [], willRetry: false });
+
+      mockSession.resolvePrompt();
+      mockSession.emitEvent({ type: "agent_end", messages: [], willRetry: false });
+
+      await Promise.all([promise1, promise2]);
+
+    });
+
   });
 
   describe("truncateToolResult", () => {
