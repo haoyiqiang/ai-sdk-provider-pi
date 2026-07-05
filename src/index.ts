@@ -43,6 +43,7 @@ export { mapPiFinishReason } from "./map-pi-finish-reason.js";
  * This class implements the AI SDK's LanguageModelV3 interface.
  */
 export { PiLanguageModel } from "./pi-language-model.js";
+export { PiSessionManager } from "./pi-session-manager.js";
 /**
  * Type definitions for the Pi provider.
  * @see {@link PiProvider} for the provider interface
