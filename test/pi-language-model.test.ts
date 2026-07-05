@@ -1653,12 +1653,49 @@ describe("PiLanguageModel", () => {
           frequencyPenalty: 0.3,
           stopSequences: ["END"],
           seed: 42,
+          tools: [{ type: "function", name: "test" } as any],
+          toolChoice: "auto" as any,
         },
         "test prompt",
         [],
       );
       const unsupported = warnings.filter((w: any) => w.type === "unsupported");
-      expect(unsupported.length).toBe(7);
+      expect(unsupported.length).toBe(9);
+    });
+
+    it("warns when options.tools is non-empty", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const warnings = (model as any).generateAllWarnings(
+        { tools: [{ type: "function", name: "test" } as any] },
+        "test prompt",
+        [],
+      );
+      const unsupported = warnings.filter((w: any) => w.type === "unsupported");
+      expect(unsupported.length).toBe(1);
+      expect(unsupported[0].feature).toBe("tools");
+    });
+
+    it("warns when options.toolChoice is set", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const warnings = (model as any).generateAllWarnings(
+        { toolChoice: "auto" as any },
+        "test prompt",
+        [],
+      );
+      const unsupported = warnings.filter((w: any) => w.type === "unsupported");
+      expect(unsupported.length).toBe(1);
+      expect(unsupported[0].feature).toBe("toolChoice");
+    });
+
+    it("does not warn when options.tools is empty array", () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const warnings = (model as any).generateAllWarnings(
+        { tools: [] },
+        "test prompt",
+        [],
+      );
+      const unsupported = warnings.filter((w: any) => w.type === "unsupported");
+      expect(unsupported.length).toBe(0);
     });
   });
 

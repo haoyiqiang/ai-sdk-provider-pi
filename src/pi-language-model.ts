@@ -578,6 +578,12 @@ export class PiLanguageModel implements LanguageModelV3 {
     if (options.seed !== undefined) {
       unsupportedParams.push("seed");
     }
+    if (options.tools && options.tools.length > 0) {
+      unsupportedParams.push("tools");
+    }
+    if (options.toolChoice !== undefined) {
+      unsupportedParams.push("toolChoice");
+    }
 
     for (const param of unsupportedParams) {
       warnings.push({
