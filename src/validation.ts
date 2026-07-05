@@ -1,5 +1,9 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { PiLanguageModelSettings, PiProviderSettings } from "./types.js";
+import type {
+  Logger,
+  PiLanguageModelSettings,
+  PiProviderSettings,
+} from "./types.js";
 
 /**
  * Validates and parses a Pi model ID string.
@@ -58,14 +62,99 @@ export function parseModelId(modelId: string): {
 }
 
 /**
- * Validates Pi provider settings and returns warnings.
+ * Known keys for PiProviderSettings.
+ */
+const PROVIDER_SETTINGS_KEYS = new Set([
+  "authStorage",
+  "modelRegistry",
+  "sessionManager",
+  "cwd",
+  "agentDir",
+  "tools",
+  "excludeTools",
+  "noTools",
+  "customTools",
+  "sandbox",
+  "verbose",
+  "logger",
+]);
+
+/**
+ * Known keys for PiLanguageModelSettings.
+ */
+const MODEL_SETTINGS_KEYS = new Set([
+  "thinkingLevel",
+  "maxTurns",
+  "systemPrompt",
+  "appendSystemPrompt",
+  "cwd",
+  "tools",
+  "excludeTools",
+  "maxBudgetUsd",
+  "maxToolResultSize",
+  "sandbox",
+]);
+
+/**
+ * Validates that an object only contains known keys.
+ * Throws on first unknown key found.
+ */
+function validateKnownKeys(
+  obj: Record<string, unknown>,
+  knownKeys: Set<string>,
+  context: string,
+): void {
+  for (const key of Object.keys(obj)) {
+    if (!knownKeys.has(key)) {
+      throw new Error(
+        `Unknown setting '${key}' in ${context}. Allowed keys: ${[...knownKeys].sort().join(", ")}`,
+      );
+    }
+  }
+}
+
+/**
+ * Validates that a logger object has the required methods.
+ */
+function validateLoggerShape(logger: unknown): asserts logger is Logger {
+  if (logger === null || typeof logger !== "object") {
+    throw new Error(
+      "Logger must be a non-null object with methods: debug, info, warn, error",
+    );
+  }
+
+  const required = ["debug", "info", "warn", "error"] as const;
+  for (const method of required) {
+    if (typeof (logger as Record<string, unknown>)[method] !== "function") {
+      throw new Error(
+        `Logger must implement a '${method}' method (received: ${typeof (logger as Record<string, unknown>)[method]})`,
+      );
+    }
+  }
+}
+
+/**
+ * Validates Pi provider settings, rejecting unknown keys and validating
+ * the logger shape. Returns warnings for advisory conditions.
  */
 export function validateProviderSettings(settings: PiProviderSettings): {
   warnings: string[];
 } {
   const warnings: string[] = [];
 
-  // Warn about high turn limits
+  // Reject unknown keys
+  validateKnownKeys(
+    settings as Record<string, unknown>,
+    PROVIDER_SETTINGS_KEYS,
+    "provider settings",
+  );
+
+  // Validate optional logger shape
+  if (settings.logger !== undefined && settings.logger !== false) {
+    validateLoggerShape(settings.logger);
+  }
+
+  // Warn about verbose logging
   if (settings.verbose) {
     warnings.push("Verbose logging is enabled — this may impact performance");
   }
@@ -74,12 +163,20 @@ export function validateProviderSettings(settings: PiProviderSettings): {
 }
 
 /**
- * Validates Pi language model settings and returns warnings.
+ * Validates Pi language model settings, rejecting unknown keys.
+ * Returns warnings for advisory conditions.
  */
 export function validateModelSettings(settings: PiLanguageModelSettings): {
   warnings: string[];
 } {
   const warnings: string[] = [];
+
+  // Reject unknown keys
+  validateKnownKeys(
+    settings as Record<string, unknown>,
+    MODEL_SETTINGS_KEYS,
+    "model settings",
+  );
 
   // Warn about high turn limits
   if (settings.maxTurns && settings.maxTurns > 50) {
