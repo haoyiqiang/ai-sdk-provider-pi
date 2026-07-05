@@ -934,19 +934,29 @@ export class PiLanguageModel implements LanguageModelV3 {
   }
 
   private extractUsage(piUsage: PiUsage): LanguageModelV3Usage {
+    const input = piUsage.input ?? 0;
+    const cacheRead = piUsage.cacheRead ?? 0;
+    const noCache =
+      cacheRead > 0 ? Math.max(input - cacheRead, 0) : input;
     return {
       inputTokens: {
         total: piUsage.input ?? undefined,
-        noCache: undefined,
+        noCache: noCache > 0 ? noCache : undefined,
         cacheRead: piUsage.cacheRead ?? undefined,
         cacheWrite: piUsage.cacheWrite ?? undefined,
       },
       outputTokens: {
         total: piUsage.output ?? undefined,
-        text: undefined,
+        text: piUsage.output ?? undefined,
         reasoning: undefined,
       },
-      raw: piUsage as unknown as JSONObject,
+      raw: {
+        input: piUsage.input,
+        output: piUsage.output,
+        cacheRead: piUsage.cacheRead,
+        cacheWrite: piUsage.cacheWrite,
+        totalTokens: piUsage.totalTokens,
+      } as JSONObject,
     };
   }
 
