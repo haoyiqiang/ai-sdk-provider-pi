@@ -6,6 +6,7 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PiLanguageModel } from "../src/pi-language-model.js";
 import type { PiLanguageModelOptions } from "../src/types.js";
+import { truncateJsonValue } from "../src/tool-mapper.js";
 
 // ─── Mock factories ───
 
@@ -1047,34 +1048,32 @@ describe("PiLanguageModel", () => {
     });
   });
 
-  describe("truncateToolResult", () => {
+  describe("truncateJsonValue", () => {
     it("returns full result when below max size", () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).truncateToolResult("short result");
-      expect(result).toBe("short result");
+      const result = truncateJsonValue("short result", 10000);
+      expect(result.truncated).toBe(false);
+      expect(result.preview).toBe("short result");
     });
 
     it("truncates result exceeding max size", () => {
-      const model = new PiLanguageModel(createModelOptions());
-      const longText = "a".repeat(15_000);
-      const result = (model as any).truncateToolResult(longText);
-      expect(result.length).toBeLessThan(longText.length);
-      expect(result).toContain("[truncated");
-      expect(result).toContain("chars]");
+      const longText = "a".repeat(15000);
+      const result = truncateJsonValue(longText, 10000);
+      expect(result.truncated).toBe(true);
+      expect(result.maxSize).toBe(10000);
+      expect(result.preview.length).toBeLessThan(longText.length);
+      expect(result.preview).toContain("[truncated");
+      expect(result.preview).toContain("chars]");
     });
 
-    it("respects custom maxToolResultSize", () => {
-      const model = new PiLanguageModel(
-        createModelOptions({ settings: { maxToolResultSize: 50 } }),
-      );
+    it("respects custom maxSize", () => {
       const longText = "a".repeat(100);
-      const result = (model as any).truncateToolResult(longText);
-      expect(result.length).toBeLessThanOrEqual(
-        50 + "[truncated X chars]".length + 10,
-      );
-      expect(result).toContain("[truncated");
+      const result = truncateJsonValue(longText, 50);
+      expect(result.truncated).toBe(true);
+      expect(result.maxSize).toBe(50);
+      expect(result.preview).toContain("[truncated");
     });
   });
+
 
   describe("abort handling in doGenerate", () => {
     let mockSession: ReturnType<typeof createMockSession>;

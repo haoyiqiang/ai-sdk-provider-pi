@@ -37,6 +37,11 @@ import {
   convertToPiMessages,
 } from "./convert-to-pi-messages.js";
 import { handlePiError } from "./errors.js";
+import {
+  DEFAULT_MAX_TOOL_RESULT_SIZE,
+  mapPiToolCall,
+  mapPiToolResult,
+} from "./tool-mapper.js";
 import { mapPiFinishReason } from "./map-pi-finish-reason.js";
 import type {
   Logger,
@@ -98,8 +103,6 @@ export class PiLanguageModel implements LanguageModelV3 {
   private sessionId: string | undefined;
   private disposed = false;
 
-  private static readonly UNKNOWN_TOOL_NAME = "unknown_tool";
-  private static readonly MAX_TOOL_RESULT_SIZE = 10_000;
 
   constructor(options: PiLanguageModelOptions) {
     this.modelId = options.id;
@@ -458,14 +461,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                 } else if (msgEvent.type === "thinking_delta") {
                   thinking.push(msgEvent.delta);
                 } else if (msgEvent.type === "toolcall_end") {
-                  toolCalls.push({
-                    toolCallId: msgEvent.toolCall.id,
-                    toolName: msgEvent.toolCall.name,
-                    input:
-                      typeof msgEvent.toolCall.arguments === "string"
-                        ? msgEvent.toolCall.arguments
-                        : JSON.stringify(msgEvent.toolCall.arguments),
-                  });
+                  toolCalls.push(mapPiToolCall(msgEvent.toolCall));
                 }
                 break;
               }
@@ -741,15 +737,9 @@ export class PiLanguageModel implements LanguageModelV3 {
                           type: "tool-input-end",
                           id: toolCallId,
                         });
-                        controller.enqueue({
-                          type: "tool-call",
-                          toolCallId,
-                          toolName: msgEvent.toolCall.name,
-                          input:
-                            typeof msgEvent.toolCall.arguments === "string"
-                              ? msgEvent.toolCall.arguments
-                              : JSON.stringify(msgEvent.toolCall.arguments),
-                        });
+                        controller.enqueue(
+                          mapPiToolCall(msgEvent.toolCall),
+                        );
                       }
                       break;
                     }
@@ -779,19 +769,11 @@ export class PiLanguageModel implements LanguageModelV3 {
                 }
 
                 case "tool_execution_end": {
-                  const resultText = this.truncateToolResult(
-                    typeof event.result === "string"
-                      ? event.result
-                      : JSON.stringify(event.result ?? ""),
+                  const maxSize =
+                    this.settings.maxToolResultSize ?? DEFAULT_MAX_TOOL_RESULT_SIZE;
+                  controller.enqueue(
+                    mapPiToolResult(event, maxSize),
                   );
-                  controller.enqueue({
-                    type: "tool-result",
-                    toolCallId: event.toolCallId,
-                    toolName: event.toolName,
-                    result: resultText as any,
-                    isError: event.isError || undefined,
-                    dynamic: true,
-                  });
                   toolStates.delete(event.toolCallId);
                   break;
                 }
@@ -928,7 +910,7 @@ export class PiLanguageModel implements LanguageModelV3 {
     };
     return {
       id: tc.id || generateId(),
-      name: tc.name || PiLanguageModel.UNKNOWN_TOOL_NAME,
+      name: tc.name || "unknown_tool",
       arguments: tc.arguments || {},
     };
   }
@@ -960,15 +942,6 @@ export class PiLanguageModel implements LanguageModelV3 {
       },
       outputTokens: { total: undefined, text: undefined, reasoning: undefined },
     };
-  }
-
-  private truncateToolResult(result: string): string {
-    const maxSize =
-      this.settings.maxToolResultSize ?? PiLanguageModel.MAX_TOOL_RESULT_SIZE;
-    if (result.length <= maxSize) {
-      return result;
-    }
-    return `${result.slice(0, maxSize)}...[truncated ${result.length - maxSize} chars]`;
   }
 
   private generateAllWarnings(
