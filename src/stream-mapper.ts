@@ -6,24 +6,22 @@ import type {
   SharedV3ProviderMetadata,
   SharedV3Warning,
 } from "@ai-sdk/provider";
-import type {
-  AssistantMessage,
-  Usage as PiUsage,
-} from "@earendil-works/pi-ai";
-import type {
-  AgentSessionEvent,
-} from "@earendil-works/pi-coding-agent";
+import type { AssistantMessage, Usage as PiUsage } from "@earendil-works/pi-ai";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { mapPiFinishReason } from "./map-pi-finish-reason.js";
 import { mapPiToolCall, mapPiToolResult } from "./tool-mapper.js";
-import type {
-  PiProviderMetadata,
-  ToolStreamState,
-} from "./types.js";
+import type { PiProviderMetadata, ToolStreamState } from "./types.js";
 
 // ─── Constants ───
 
-import { UNKNOWN_TOOL_NAME, DEFAULT_MAX_TOOL_RESULT_SIZE } from "./tool-mapper.js";
-export { UNKNOWN_TOOL_NAME, DEFAULT_MAX_TOOL_RESULT_SIZE as MAX_TOOL_RESULT_SIZE };
+import {
+  UNKNOWN_TOOL_NAME,
+  DEFAULT_MAX_TOOL_RESULT_SIZE,
+} from "./tool-mapper.js";
+export {
+  UNKNOWN_TOOL_NAME,
+  DEFAULT_MAX_TOOL_RESULT_SIZE as MAX_TOOL_RESULT_SIZE,
+};
 
 // ─── Context type ───
 
@@ -180,10 +178,7 @@ export function extractToolCallFromPartial(
 /**
  * Truncates a tool result string if it exceeds the given max size.
  */
-export function truncateToolResult(
-  result: string,
-  maxSize: number,
-): string {
+export function truncateToolResult(result: string, maxSize: number): string {
   if (result.length <= maxSize) {
     return result;
   }
@@ -260,7 +255,11 @@ function closeReasoningPart(
 function extractMessageEndData(
   event: Extract<AgentSessionEvent, { type: "message_end" }>,
   sessionId: string | undefined,
-): { usage: LanguageModelV3Usage; finishReason: LanguageModelV3FinishReason; piMeta: PiProviderMetadata } {
+): {
+  usage: LanguageModelV3Usage;
+  finishReason: LanguageModelV3FinishReason;
+  piMeta: PiProviderMetadata;
+} {
   let usage: LanguageModelV3Usage = createEmptyUsage();
   let finishReason: LanguageModelV3FinishReason = {
     unified: "stop",
@@ -491,10 +490,9 @@ export function mapPiEventToStreamParts(
           };
           parts.push({
             type: "finish",
-            usage:
-              errMsg.error?.usage
-                ? extractUsage(errMsg.error.usage as any)
-                : ctx.usage,
+            usage: errMsg.error?.usage
+              ? extractUsage(errMsg.error.usage as any)
+              : ctx.usage,
             finishReason: errMsg.reason
               ? mapPiFinishReason(errMsg.reason)
               : ctx.finishReason,

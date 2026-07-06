@@ -84,8 +84,7 @@ export function truncateJsonValue(
   value: unknown,
   maxSize: number,
 ): TruncateResult {
-  const serialized =
-    typeof value === "string" ? value : safeStringify(value);
+  const serialized = typeof value === "string" ? value : safeStringify(value);
 
   if (serialized.length <= maxSize) {
     return {
@@ -118,7 +117,10 @@ export function truncateJsonValue(
  * throws on pathological tool output (cycles, BigInt, non-serializable
  * values).
  */
-export function toJsonValue(value: unknown, seen = new WeakSet<object>()): unknown {
+export function toJsonValue(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): unknown {
   if (value === null || value === undefined) {
     return value;
   }

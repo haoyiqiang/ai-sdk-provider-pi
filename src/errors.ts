@@ -1,8 +1,5 @@
 import { APICallError, LoadAPIKeyError } from "@ai-sdk/provider";
-import {
-  getOverflowPatterns,
-  isContextOverflow,
-} from "@earendil-works/pi-ai";
+import { getOverflowPatterns, isContextOverflow } from "@earendil-works/pi-ai";
 
 // Re-export pi-ai's isContextOverflow for consumers that inspect an
 // AssistantMessage directly (e.g. stream message_end events with
@@ -326,7 +323,9 @@ export function handlePiError(
     }
 
     // HTTP status code (some Pi SDK errors carry a statusCode/status property)
-    const statusCode = (err as unknown as Record<string, unknown>).statusCode ?? (err as unknown as Record<string, unknown>).status;
+    const statusCode =
+      (err as unknown as Record<string, unknown>).statusCode ??
+      (err as unknown as Record<string, unknown>).status;
     if (typeof statusCode === "number") {
       if (statusCode === 401 || statusCode === 403) {
         throw createAuthenticationError({ message, provider });
@@ -426,7 +425,7 @@ export function handlePiError(
         });
       }
     }
-      // ── Structural context-overflow detection ──
+    // ── Structural context-overflow detection ──
     // If the error carries an AssistantMessage (e.g. on a `response` or
     // `assistantMessage` field), ask pi-ai's structural detector rather
     // than relying on message text. This survives upstream wording changes.

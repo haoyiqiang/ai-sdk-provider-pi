@@ -208,15 +208,15 @@ describe("validateProviderSettings", () => {
   });
 
   it("rejects non-object logger", () => {
-    expect(() =>
-      validateProviderSettings({ logger: "string" } as any),
-    ).toThrow("Logger must be a non-null object");
+    expect(() => validateProviderSettings({ logger: "string" } as any)).toThrow(
+      "Logger must be a non-null object",
+    );
   });
 
   it("rejects null logger", () => {
-    expect(() =>
-      validateProviderSettings({ logger: null } as any),
-    ).toThrow("Logger must be a non-null object");
+    expect(() => validateProviderSettings({ logger: null } as any)).toThrow(
+      "Logger must be a non-null object",
+    );
   });
 
   it("does not validate logger when logger is false", () => {
@@ -252,15 +252,15 @@ describe("validateModelSettings", () => {
   });
 
   it("rejects unknown keys in model settings", () => {
-    expect(() =>
-      validateModelSettings({ unknownOption: true } as any),
-    ).toThrow("Unknown setting 'unknownOption'");
+    expect(() => validateModelSettings({ unknownOption: true } as any)).toThrow(
+      "Unknown setting 'unknownOption'",
+    );
   });
 
   it("reports the allowed keys in the error message", () => {
-    expect(() =>
-      validateModelSettings({ badKey: 1 } as any),
-    ).toThrow(/Allowed keys:/);
+    expect(() => validateModelSettings({ badKey: 1 } as any)).toThrow(
+      /Allowed keys:/,
+    );
   });
 });
 

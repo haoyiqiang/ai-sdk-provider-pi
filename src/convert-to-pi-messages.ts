@@ -29,9 +29,7 @@ export function convertToPiMessages(prompt: readonly ModelMessage[]): {
         if (typeof message.content === "string") {
           systemPrompt = message.content;
         } else {
-          warnings.push(
-            "System message with non-string content was ignored.",
-          );
+          warnings.push("System message with non-string content was ignored.");
         }
         break;
       }
@@ -212,10 +210,7 @@ function convertAssistantMessage(
   }
 
   if (content.length === 0) {
-    if (
-      Array.isArray(message.content) &&
-      message.content.length > 0
-    ) {
+    if (Array.isArray(message.content) && message.content.length > 0) {
       warnings.push(
         "Assistant message with content was dropped because no representable parts were found.",
       );

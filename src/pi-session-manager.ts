@@ -112,9 +112,7 @@ export class PiSessionManager {
    * Rejections are swallowed for queue continuity (the queue stays
    * alive), but propagated to the caller.
    */
-  runSerialized<T>(
-    fn: (session: AgentSession) => Promise<T>,
-  ): Promise<T> {
+  runSerialized<T>(fn: (session: AgentSession) => Promise<T>): Promise<T> {
     const task = this.#queueTail.then(async () => {
       if (this.disposed) {
         this.disposed = false; // Reset so a new session can be created

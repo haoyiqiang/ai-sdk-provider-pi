@@ -630,9 +630,7 @@ describe("handlePiError — structural classification", () => {
     it("matches OpenAI overflow pattern", () => {
       try {
         handlePiError(
-          new Error(
-            "Your input exceeds the context window of this model",
-          ),
+          new Error("Your input exceeds the context window of this model"),
         );
       } catch (e) {
         expect(e).toBeInstanceOf(APICallError);
@@ -644,11 +642,7 @@ describe("handlePiError — structural classification", () => {
 
     it("matches Google overflow pattern", () => {
       try {
-        handlePiError(
-          new Error(
-            "The input token count exceeds the maximum",
-          ),
-        );
+        handlePiError(new Error("The input token count exceeds the maximum"));
       } catch (e) {
         expect(e).toBeInstanceOf(APICallError);
         expect(isContextOverflowError(e)).toBe(true);

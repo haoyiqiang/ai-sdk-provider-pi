@@ -41,7 +41,7 @@ The user-facing surface (`createPi`, `pi`, `PiLanguageModel.doGenerate` / `doStr
 1. As a provider author, I want concurrent `doGenerate` calls on the same model to be safe, so that I do not corrupt a Pi session by issuing overlapping `session.prompt()` calls.
 2. As a provider author, I want concurrent `doStream` calls on the same model to be safe, so that streaming and one-shot calls on the same model do not interleave their events.
 3. As a provider author, I want a per-session prompt queue, so that calls to the same session execute in arrival order rather than concurrently.
-4. As a provider author, I want concurrent calls to *different* models (different sessions) to run in parallel, so that serialization is per-session, not global.
+4. As a provider author, I want concurrent calls to _different_ models (different sessions) to run in parallel, so that serialization is per-session, not global.
 5. As a developer using the provider, I want aborts to be reported as a distinct, non-retryable error type, so that I can tell a user-initiated cancel apart from a server failure.
 6. As a developer using the provider, I want authentication errors to be reported as `LoadAPIKeyError`, so that AI SDK's auth-handling paths trigger correctly.
 7. As a developer using the provider, I want context-overflow errors to be detected structurally (from the pi-ai SDK), so that I am not blindsided when a model's error message wording changes.

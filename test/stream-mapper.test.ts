@@ -7,9 +7,7 @@ import type {
   AssistantMessageEvent,
   Usage as PiUsage,
 } from "@earendil-works/pi-ai";
-import type {
-  AgentSessionEvent,
-} from "@earendil-works/pi-coding-agent";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createEmptyUsage,
@@ -24,7 +22,9 @@ import type { PiProviderMetadata } from "../src/types.js";
 
 // ─── Helpers ───
 
-function createCtx(overrides?: Partial<StreamMapperContext>): StreamMapperContext {
+function createCtx(
+  overrides?: Partial<StreamMapperContext>,
+): StreamMapperContext {
   return {
     activeTextPartId: undefined,
     activeReasoningPartId: undefined,
@@ -98,7 +98,12 @@ describe("mapPiEventToStreamParts", () => {
       expect(parts).toHaveLength(2);
       expect(parts[0].type).toBe("stream-start");
       expect(parts[1].type).toBe("response-metadata");
-      const meta = parts[1] as { type: "response-metadata"; id?: string; timestamp?: Date; modelId?: string };
+      const meta = parts[1] as {
+        type: "response-metadata";
+        id?: string;
+        timestamp?: Date;
+        modelId?: string;
+      };
       expect(meta.id).toBe("test-session");
       expect(meta.timestamp).toBeInstanceOf(Date);
       expect(meta.modelId).toBe("test-model");
@@ -233,11 +238,13 @@ describe("mapPiEventToStreamParts", () => {
 
       const parts = mapPiEventToStreamParts(event, ctx);
 
-      const textStart = parts.find(p => p.type === "text-start") as any;
+      const textStart = parts.find((p) => p.type === "text-start") as any;
       expect(textStart.providerMetadata).toBeDefined();
-      expect(textStart.providerMetadata.provider).toEqual({ value: "anthropic" });
+      expect(textStart.providerMetadata.provider).toEqual({
+        value: "anthropic",
+      });
 
-      const textDelta = parts.find(p => p.type === "text-delta") as any;
+      const textDelta = parts.find((p) => p.type === "text-delta") as any;
       expect(textDelta.providerMetadata).toBeDefined();
     });
   });
@@ -272,7 +279,10 @@ describe("mapPiEventToStreamParts", () => {
 
       expect(parts).toHaveLength(3);
       expect(parts[0]).toMatchObject({ type: "reasoning-start" });
-      expect(parts[1]).toMatchObject({ type: "reasoning-delta", delta: "Hmm..." });
+      expect(parts[1]).toMatchObject({
+        type: "reasoning-delta",
+        delta: "Hmm...",
+      });
       expect(parts[2]).toMatchObject({ type: "reasoning-end" });
 
       const id = (parts[0] as any).id;
@@ -294,7 +304,10 @@ describe("mapPiEventToStreamParts", () => {
 
       expect(parts).toHaveLength(2);
       expect(parts[0]).toMatchObject({ type: "reasoning-start" });
-      expect(parts[1]).toMatchObject({ type: "reasoning-delta", delta: "Let me think" });
+      expect(parts[1]).toMatchObject({
+        type: "reasoning-delta",
+        delta: "Let me think",
+      });
     });
 
     it("ignores thinking_end when no reasoning is active", () => {
@@ -315,7 +328,11 @@ describe("mapPiEventToStreamParts", () => {
   // ═══════════════════════════════════════════
 
   describe("tool call streaming (from message_update)", () => {
-    function makeToolCallPartial(id: string, name: string, args: Record<string, unknown>): any {
+    function makeToolCallPartial(
+      id: string,
+      name: string,
+      args: Record<string, unknown>,
+    ): any {
       return {
         content: [{ type: "toolCall", id, name, arguments: args }],
       };
@@ -360,8 +377,14 @@ describe("mapPiEventToStreamParts", () => {
         providerExecuted: true,
         dynamic: true,
       });
-      expect(parts[1]).toMatchObject({ type: "tool-input-delta", delta: '{"path":' });
-      expect(parts[2]).toMatchObject({ type: "tool-input-delta", delta: '"/tmp/f"}' });
+      expect(parts[1]).toMatchObject({
+        type: "tool-input-delta",
+        delta: '{"path":',
+      });
+      expect(parts[2]).toMatchObject({
+        type: "tool-input-delta",
+        delta: '"/tmp/f"}',
+      });
       expect(parts[3]).toMatchObject({ type: "tool-input-end", id: tcId });
       expect(parts[4]).toMatchObject({
         type: "tool-call",
@@ -394,11 +417,11 @@ describe("mapPiEventToStreamParts", () => {
 
       const parts = mapPiEventToStreamParts(event, ctx);
 
-      const textEndPart = parts.find(p => p.type === "text-end");
+      const textEndPart = parts.find((p) => p.type === "text-end");
       expect(textEndPart).toBeDefined();
       expect(ctx.activeTextPartId).toBeUndefined();
 
-      const toolStartPart = parts.find(p => p.type === "tool-input-start");
+      const toolStartPart = parts.find((p) => p.type === "tool-input-start");
       expect(toolStartPart).toBeDefined();
     });
 
@@ -420,11 +443,13 @@ describe("mapPiEventToStreamParts", () => {
       const event = makeMessageUpdateEvent({
         type: "toolcall_start",
         contentIndex: 0,
-        partial: { content: [{ type: "toolCall", id: tcId, arguments: {} }] } as any,
+        partial: {
+          content: [{ type: "toolCall", id: tcId, arguments: {} }],
+        } as any,
       });
 
       const parts = mapPiEventToStreamParts(event, ctx);
-      const startPart = parts.find(p => p.type === "tool-input-start") as any;
+      const startPart = parts.find((p) => p.type === "tool-input-start") as any;
       expect(startPart.toolName).toBe(UNKNOWN_TOOL_NAME);
     });
 
@@ -445,7 +470,7 @@ describe("mapPiEventToStreamParts", () => {
       ];
 
       const parts = collectParts(events, ctx);
-      const callPart = parts.find(p => p.type === "tool-call") as any;
+      const callPart = parts.find((p) => p.type === "tool-call") as any;
       expect(callPart.input).toBe('{"command":"ls"}');
     });
 
@@ -466,7 +491,7 @@ describe("mapPiEventToStreamParts", () => {
       ];
 
       const parts = collectParts(events, ctx);
-      const callPart = parts.find(p => p.type === "tool-call") as any;
+      const callPart = parts.find((p) => p.type === "tool-call") as any;
       expect(callPart.input).toBe("already a string");
     });
 
@@ -624,7 +649,9 @@ describe("mapPiEventToStreamParts", () => {
       };
 
       const parts = mapPiEventToStreamParts(event, ctx);
-      expect((parts[0] as any).result).toBe('{"content":"file data","lines":10}');
+      expect((parts[0] as any).result).toBe(
+        '{"content":"file data","lines":10}',
+      );
     });
 
     it("handles null/undefined results", () => {
@@ -717,12 +744,16 @@ describe("mapPiEventToStreamParts", () => {
 
       const event: AgentSessionEvent = {
         type: "message_end",
-        message: { role: "assistant", stopReason: "end_turn", usage: {} } as any,
+        message: {
+          role: "assistant",
+          stopReason: "end_turn",
+          usage: {},
+        } as any,
       };
 
       const parts = mapPiEventToStreamParts(event, ctx);
 
-      const textEnd = parts.find(p => p.type === "text-end");
+      const textEnd = parts.find((p) => p.type === "text-end");
       expect(textEnd).toBeDefined();
       expect(ctx.activeTextPartId).toBeUndefined();
     });
@@ -745,7 +776,7 @@ describe("mapPiEventToStreamParts", () => {
       };
 
       const parts = mapPiEventToStreamParts(event, ctx);
-      const reasoningEnd = parts.find(p => p.type === "reasoning-end");
+      const reasoningEnd = parts.find((p) => p.type === "reasoning-end");
       expect(reasoningEnd).toBeDefined();
       expect(ctx.activeReasoningPartId).toBeUndefined();
     });
@@ -837,8 +868,8 @@ describe("mapPiEventToStreamParts", () => {
 
       const parts = mapPiEventToStreamParts(event, ctx);
 
-      expect(parts.filter(p => p.type === "text-end")).toHaveLength(1);
-      expect(parts.filter(p => p.type === "reasoning-end")).toHaveLength(1);
+      expect(parts.filter((p) => p.type === "text-end")).toHaveLength(1);
+      expect(parts.filter((p) => p.type === "reasoning-end")).toHaveLength(1);
       expect(ctx.activeTextPartId).toBeUndefined();
       expect(ctx.activeReasoningPartId).toBeUndefined();
     });
@@ -872,7 +903,12 @@ describe("mapPiEventToStreamParts", () => {
 
       // Set usage/finish directly in ctx (simulating prior message_end)
       ctx.usage = {
-        inputTokens: { total: 200, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
+        inputTokens: {
+          total: 200,
+          noCache: undefined,
+          cacheRead: undefined,
+          cacheWrite: undefined,
+        },
         outputTokens: { total: 100, text: undefined, reasoning: undefined },
       };
       ctx.finishReason = { unified: "stop", raw: undefined };
@@ -886,10 +922,10 @@ describe("mapPiEventToStreamParts", () => {
       const parts = mapPiEventToStreamParts(event, ctx);
 
       // Should have text-end, reasoning-end, and finish
-      expect(parts.filter(p => p.type === "text-end")).toHaveLength(1);
-      expect(parts.filter(p => p.type === "reasoning-end")).toHaveLength(1);
+      expect(parts.filter((p) => p.type === "text-end")).toHaveLength(1);
+      expect(parts.filter((p) => p.type === "reasoning-end")).toHaveLength(1);
 
-      const finish = parts.find(p => p.type === "finish") as any;
+      const finish = parts.find((p) => p.type === "finish") as any;
       expect(finish).toBeDefined();
       expect(finish.finishReason.unified).toBe("stop");
       expect(finish.usage.inputTokens.total).toBe(200);
@@ -915,7 +951,7 @@ describe("mapPiEventToStreamParts", () => {
       };
 
       const parts = mapPiEventToStreamParts(event, ctx);
-      const finish = parts.find(p => p.type === "finish") as any;
+      const finish = parts.find((p) => p.type === "finish") as any;
       expect(finish.finishReason.unified).toBe("tool-calls");
     });
 
@@ -943,7 +979,7 @@ describe("mapPiEventToStreamParts", () => {
       };
 
       const parts = mapPiEventToStreamParts(event, startCtx);
-      const finish = parts.find(p => p.type === "finish") as any;
+      const finish = parts.find((p) => p.type === "finish") as any;
       const durationMs = Number(finish.providerMetadata.durationMs.value);
       expect(durationMs).toBeGreaterThanOrEqual(5000);
     });
@@ -961,7 +997,10 @@ describe("mapPiEventToStreamParts", () => {
         label: "turn_end",
         event: { type: "turn_end", message: {} as any, toolResults: [] },
       },
-      { label: "message_start", event: { type: "message_start", message: {} as any } },
+      {
+        label: "message_start",
+        event: { type: "message_start", message: {} as any },
+      },
       {
         label: "queue_update",
         event: { type: "queue_update", steering: [], followUp: [] },
@@ -1109,7 +1148,7 @@ describe("mapPiEventToStreamParts", () => {
 
       const parts = collectParts(events, ctx);
 
-      const toolCalls = parts.filter(p => p.type === "tool-call");
+      const toolCalls = parts.filter((p) => p.type === "tool-call");
       expect(toolCalls).toHaveLength(2);
 
       const call1 = toolCalls[0] as any;
@@ -1236,7 +1275,13 @@ describe("extractUsage", () => {
     cacheRead: 0,
     cacheWrite: 0,
     totalTokens: 150,
-    cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 },
+    cost: {
+      input: 0.01,
+      output: 0.02,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0.03,
+    },
   };
 
   it("computes noCache = input when cacheRead is 0", () => {
@@ -1279,7 +1324,13 @@ describe("extractUsage", () => {
     expect(raw.cacheRead).toBe(0);
     expect(raw.cacheWrite).toBe(0);
     expect(raw.totalTokens).toBe(150);
-    expect(raw.cost).toEqual({ input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 });
+    expect(raw.cost).toEqual({
+      input: 0.01,
+      output: 0.02,
+      cacheRead: 0,
+      cacheWrite: 0,
+      total: 0.03,
+    });
   });
 
   it("handles zero usage", () => {
@@ -1299,7 +1350,11 @@ describe("extractUsage", () => {
 });
 
 // ─── Helper function for tool call partials ───
-function makeToolCallPartial(id: string, name: string, args: Record<string, unknown>): any {
+function makeToolCallPartial(
+  id: string,
+  name: string,
+  args: Record<string, unknown>,
+): any {
   return {
     content: [{ type: "toolCall", id, name, arguments: args }],
   };

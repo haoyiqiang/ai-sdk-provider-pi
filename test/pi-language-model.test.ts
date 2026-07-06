@@ -6,7 +6,11 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PiLanguageModel } from "../src/pi-language-model.js";
 import type { PiLanguageModelOptions } from "../src/types.js";
-import { createEmptyUsage, extractToolCallFromPartial, truncateToolResult } from "../src/stream-mapper.js";
+import {
+  createEmptyUsage,
+  extractToolCallFromPartial,
+  truncateToolResult,
+} from "../src/stream-mapper.js";
 
 // ─── Mock factories ───
 
@@ -342,7 +346,12 @@ describe("PiLanguageModel", () => {
         message: {
           role: "assistant",
           content: [
-            { type: "toolCall", id: "tc_1", name: "read", arguments: { path: "/tmp/test.txt" } },
+            {
+              type: "toolCall",
+              id: "tc_1",
+              name: "read",
+              arguments: { path: "/tmp/test.txt" },
+            },
           ],
           api: "anthropic-messages",
           provider: "anthropic",
@@ -557,7 +566,10 @@ describe("PiLanguageModel", () => {
             role: "assistant",
             content: [{ type: "text", text: "First answer" }],
           },
-          { role: "user", content: [{ type: "text", text: "Second question" }] },
+          {
+            role: "user",
+            content: [{ type: "text", text: "Second question" }],
+          },
         ],
       });
 
@@ -566,8 +578,9 @@ describe("PiLanguageModel", () => {
       // The agent state should contain the first user message and assistant
       // message as "prior" history. The last user message is used as the
       // prompt text, not seeded.
-      const agentMessages = mockSession.session.agent.state
-        .messages as Array<{ role: string }>;
+      const agentMessages = mockSession.session.agent.state.messages as Array<{
+        role: string;
+      }>;
       expect(agentMessages).toHaveLength(2);
       expect(agentMessages[0].role).toBe("user");
       expect(agentMessages[1].role).toBe("assistant");
@@ -587,14 +600,24 @@ describe("PiLanguageModel", () => {
             cacheRead: 0,
             cacheWrite: 0,
             totalTokens: 15,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
           },
           stopReason: "stop",
           timestamp: Date.now(),
         } as AssistantMessage,
       });
       mockSession.resolvePrompt();
-      mockSession.emitEvent({ type: "agent_end", messages: [], willRetry: false });
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
 
       await generatePromise;
     });
@@ -1143,14 +1166,24 @@ describe("PiLanguageModel", () => {
             cacheRead: 0,
             cacheWrite: 0,
             totalTokens: 15,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
           },
           stopReason: "stop",
           timestamp: Date.now(),
         } as AssistantMessage,
       });
       mockSession.resolvePrompt();
-      mockSession.emitEvent({ type: "agent_end", messages: [], willRetry: false });
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
 
       await promise1;
 
@@ -1173,21 +1206,30 @@ describe("PiLanguageModel", () => {
             cacheRead: 0,
             cacheWrite: 0,
             totalTokens: 0,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
           },
           stopReason: "stop",
           timestamp: Date.now(),
         } as AssistantMessage,
       });
       mockSession.resolvePrompt();
-      mockSession.emitEvent({ type: "agent_end", messages: [], willRetry: false });
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
 
       await promise2;
 
       // Only one session was ever created.
       expect(piCodingAgent.createAgentSession).toHaveBeenCalledTimes(1);
     });
-
   });
 
   describe("truncateToolResult", () => {

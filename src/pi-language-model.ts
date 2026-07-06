@@ -41,9 +41,13 @@ import type {
   PiProviderSettings,
 } from "./types.js";
 
-import { createEmptyUsage, extractUsage, mapPiEventToStreamParts, toProviderMetadata } from "./stream-mapper.js";
+import {
+  createEmptyUsage,
+  extractUsage,
+  mapPiEventToStreamParts,
+  toProviderMetadata,
+} from "./stream-mapper.js";
 import type { StreamMapperContext } from "./stream-mapper.js";
-
 
 /**
  * PiLanguageModel implements the AI SDK LanguageModelV3 interface
@@ -73,7 +77,6 @@ export class PiLanguageModel implements LanguageModelV3 {
 
   // Session manager handles creation, disposal, and serialized access
   private readonly sessionManager: PiSessionManager;
-
 
   constructor(options: PiLanguageModelOptions) {
     this.modelId = options.id;
@@ -146,7 +149,6 @@ export class PiLanguageModel implements LanguageModelV3 {
     this.sessionManager.dispose();
   }
 
-
   // ─── Shared Helpers ───
 
   /**
@@ -203,16 +205,12 @@ export class PiLanguageModel implements LanguageModelV3 {
     }
   }
 
-
   /**
    * Seeds prior conversation history into the Pi session.
    * All messages except the last user message (which becomes the prompt text)
    * are placed in session.agent.state.messages so the agent has full context.
    */
-  private seedSessionHistory(
-    session: AgentSession,
-    context: Context,
-  ): void {
+  private seedSessionHistory(session: AgentSession, context: Context): void {
     // Find the index of the last user message
     let lastUserIndex = -1;
     for (let i = context.messages.length - 1; i >= 0; i--) {
@@ -343,8 +341,9 @@ export class PiLanguageModel implements LanguageModelV3 {
                   unsubscribe();
                   cleanupAbortListener?.();
                   piMeta.durationMs = Date.now() - startTime;
-                  const content =
-                    mapAssistantMessageContent(finalAssistantMessage);
+                  const content = mapAssistantMessageContent(
+                    finalAssistantMessage,
+                  );
                   content.push(...toolResults);
                   resolve({
                     content,
@@ -444,7 +443,6 @@ export class PiLanguageModel implements LanguageModelV3 {
       let cleanupAbortListener: (() => void) | undefined;
       const stream = new ReadableStream<LanguageModelV3StreamPart>({
         start: (controller) => {
-
           // Wrap session setup + subscribe + prompt in the per-session
           // serialization queue so concurrent doStream/doGenerate calls on
           // the same model never issue overlapping session.prompt()
@@ -469,7 +467,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                     }
                     controller.enqueue(part);
                   }
-              // Handle agent_end: close controller and clean up
+                  // Handle agent_end: close controller and clean up
                   if (event.type === "agent_end") {
                     controller.close();
                     cleanupAbortListener?.();
@@ -492,7 +490,7 @@ export class PiLanguageModel implements LanguageModelV3 {
                   }
                 }
               });
-          cleanupAbortListener = this.setupAbortHandler(
+              cleanupAbortListener = this.setupAbortHandler(
                 options.abortSignal,
                 ses,
               );
@@ -568,7 +566,6 @@ export class PiLanguageModel implements LanguageModelV3 {
 
   // ─── Helper Methods ───
 
-
   /**
    * Builds a structured output guidance preamble when JSON response format
    * is requested. Injects schema and instructions into the prompt text so
@@ -637,7 +634,8 @@ export class PiLanguageModel implements LanguageModelV3 {
     }
 
     // Compatibility warnings: Pi executes its own built-in tools
-    const compatibilityWarnings: Array<{ feature: string; details: string }> = [];
+    const compatibilityWarnings: Array<{ feature: string; details: string }> =
+      [];
     if (options.tools && options.tools.length > 0) {
       compatibilityWarnings.push({
         feature: "tools",
