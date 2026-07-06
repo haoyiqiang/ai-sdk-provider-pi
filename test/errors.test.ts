@@ -1,5 +1,22 @@
-import { APICallError, LoadAPIKeyError } from "@ai-sdk/provider";
+import { APICallError } from "@ai-sdk/provider";
 import { describe, expect, it } from "vitest";
+import {
+  createAPICallError,
+  createAbortError,
+  createAuthenticationError,
+  createContextOverflowError,
+  createTimeoutError,
+  getErrorMetadata,
+  handlePiError,
+  isAbortError,
+  isAuthenticationError,
+  isContextOverflow,
+  isContextOverflowError,
+  isRetryableError,
+  isTimeoutError,
+  NON_RETRYABLE_CODES,
+  RETRYABLE_CODES,
+} from "../src/errors.js";
 import {
   createAPICallError,
   createAuthenticationError,
@@ -39,12 +56,15 @@ describe("createAPICallError", () => {
 });
 
 describe("createAuthenticationError", () => {
-  it("creates a LoadAPIKeyError", () => {
+  it("creates an APICallError with AUTH_FAILED code", () => {
     const error = createAuthenticationError({
       message: "Invalid API key",
       provider: "anthropic",
     });
-    expect(error).toBeInstanceOf(LoadAPIKeyError);
+    expect(error).toBeInstanceOf(APICallError);
+    const data = (error as APICallError).data as any;
+    expect(data.code).toBe("AUTH_FAILED");
+    expect(error.isRetryable).toBe(false);
     expect(error.message).toContain("Invalid API key");
   });
 
@@ -98,11 +118,13 @@ describe("handlePiError", () => {
     expect(() => handlePiError(original)).toThrow(original);
   });
 
-  it("converts authentication errors to LoadAPIKeyError", () => {
+  it("converts authentication errors to APICallError with AUTH_FAILED code", () => {
     try {
       handlePiError(new Error("API key not found for anthropic"));
     } catch (e) {
-      expect(e).toBeInstanceOf(LoadAPIKeyError);
+      expect(e).toBeInstanceOf(APICallError);
+      const data = (e as APICallError).data as any;
+      expect(data.code).toBe("AUTH_FAILED");
       return;
     }
     expect.unreachable("Should have thrown");
@@ -112,17 +134,21 @@ describe("handlePiError", () => {
     try {
       handlePiError(new Error("Unauthorized access"), { provider: "openai" });
     } catch (e) {
-      expect(e).toBeInstanceOf(LoadAPIKeyError);
+      expect(e).toBeInstanceOf(APICallError);
+      const data = (e as APICallError).data as any;
+      expect(data.code).toBe("AUTH_FAILED");
       return;
     }
     expect.unreachable("Should have thrown");
   });
 
-  it('converts "401" to authentication error', () => {
+  it('converts "invalid api key" to authentication error', () => {
     try {
-      handlePiError(new Error("HTTP 401"));
+      handlePiError(new Error("invalid api key provided"));
     } catch (e) {
-      expect(e).toBeInstanceOf(LoadAPIKeyError);
+      expect(e).toBeInstanceOf(APICallError);
+      const data = (e as APICallError).data as any;
+      expect(data.code).toBe("AUTH_FAILED");
       return;
     }
     expect.unreachable("Should have thrown");
@@ -215,7 +241,7 @@ describe("handlePiError", () => {
 });
 
 describe("isAuthenticationError", () => {
-  it("returns true for LoadAPIKeyError", () => {
+  it("returns true for APICallError with AUTH_FAILED code", () => {
     const error = createAuthenticationError({ message: "Auth failed" });
     expect(isAuthenticationError(error)).toBe(true);
   });
@@ -270,5 +296,365 @@ describe("getErrorMetadata", () => {
 
   it("returns undefined for non-APICallError", () => {
     expect(getErrorMetadata(new Error("Not an API error"))).toBeUndefined();
+  });
+});
+
+describe("createAbortError", () => {
+  it("creates a non-retryable APICallError with ABORTED code", () => {
+    const error = createAbortError({
+      message: "The operation was aborted.",
+      provider: "anthropic",
+      modelId: "claude-sonnet-4",
+      sessionId: "sess_123",
+    });
+    expect(error).toBeInstanceOf(APICallError);
+    expect(error.isRetryable).toBe(false);
+    const data = error.data as any;
+    expect(data.code).toBe("ABORTED");
+    expect(data.provider).toBe("anthropic");
+    expect(data.modelId).toBe("claude-sonnet-4");
+    expect(data.sessionId).toBe("sess_123");
+  });
+
+  it("uses a default message when none provided", () => {
+    const error = createAbortError({ message: "" });
+    expect(error.message).toContain("aborted");
+  });
+});
+
+describe("isAbortError", () => {
+  it("returns true for abort errors created by createAbortError", () => {
+    const error = createAbortError({ message: "Aborted" });
+    expect(isAbortError(error)).toBe(true);
+  });
+
+  it("returns false for non-abort errors", () => {
+    const error = createAPICallError({ message: "Something" });
+    expect(isAbortError(error)).toBe(false);
+  });
+
+  it("returns false for non-AI SDK errors", () => {
+    expect(isAbortError(new Error("Not an abort"))).toBe(false);
+  });
+});
+
+describe("RETRYABLE_CODES and NON_RETRYABLE_CODES", () => {
+  it("RETRYABLE_CODES contains expected values", () => {
+    expect(RETRYABLE_CODES.has("TIMEOUT")).toBe(true);
+    expect(RETRYABLE_CODES.has("RATE_LIMIT")).toBe(true);
+    expect(RETRYABLE_CODES.has("ETIMEDOUT")).toBe(true);
+    expect(RETRYABLE_CODES.has("ESOCKETTIMEDOUT")).toBe(true);
+    expect(RETRYABLE_CODES.has("ECONNRESET")).toBe(true);
+    expect(RETRYABLE_CODES.has("ECONNREFUSED")).toBe(true);
+    expect(RETRYABLE_CODES.has("EAI_AGAIN")).toBe(true);
+  });
+
+  it("NON_RETRYABLE_CODES contains expected values", () => {
+    expect(NON_RETRYABLE_CODES.has("ABORTED")).toBe(true);
+    expect(NON_RETRYABLE_CODES.has("AUTH_FAILED")).toBe(true);
+    expect(NON_RETRYABLE_CODES.has("CONTEXT_OVERFLOW")).toBe(true);
+    expect(NON_RETRYABLE_CODES.has("ENOTFOUND")).toBe(true);
+  });
+});
+
+describe("isRetryableError", () => {
+  it("returns true for timeout errors", () => {
+    const error = createTimeoutError({ message: "Timed out" });
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it("returns true for rate limit errors", () => {
+    const error = createAPICallError({
+      message: "Rate limited",
+      code: "RATE_LIMIT",
+      isRetryable: true,
+    });
+    expect(isRetryableError(error)).toBe(true);
+  });
+
+  it("returns false for abort errors", () => {
+    const error = createAbortError({ message: "Aborted" });
+    expect(isRetryableError(error)).toBe(false);
+  });
+
+  it("returns false for context overflow errors", () => {
+    const error = createContextOverflowError({ message: "Too long" });
+    expect(isRetryableError(error)).toBe(false);
+  });
+
+  it("returns false for generic errors", () => {
+    const error = createAPICallError({ message: "Something" });
+    expect(isRetryableError(error)).toBe(false);
+  });
+
+  it("returns true for Node.js transient network errors", () => {
+    const transientErr = Object.assign(new Error("Connection refused"), {
+      code: "ECONNREFUSED",
+    });
+    expect(isRetryableError(transientErr)).toBe(true);
+  });
+
+  it("returns false for non-Error values", () => {
+    expect(isRetryableError("string")).toBe(false);
+    expect(isRetryableError(42)).toBe(false);
+  });
+});
+
+describe("handlePiError — structural classification", () => {
+  describe("abort by name (AbortError/DOMException)", () => {
+    it("detects AbortError by error.name", () => {
+      const abortErr = new Error("The operation was aborted.");
+      abortErr.name = "AbortError";
+      try {
+        handlePiError(abortErr, { provider: "anthropic" });
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect(isAbortError(e)).toBe(true);
+        expect((e as APICallError).isRetryable).toBe(false);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+  });
+
+  describe("abort by code (ABORT_ERR)", () => {
+    it("detects ABORT_ERR code", () => {
+      const abortErr = Object.assign(new Error("Aborted"), {
+        code: "ABORT_ERR",
+      });
+      try {
+        handlePiError(abortErr, { provider: "openai" });
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect(isAbortError(e)).toBe(true);
+        expect((e as APICallError).isRetryable).toBe(false);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+  });
+
+  describe("HTTP statusCode", () => {
+    it("converts 401 statusCode to authentication error", () => {
+      const err = Object.assign(new Error("Unauthorized"), {
+        statusCode: 401,
+      });
+      try {
+        handlePiError(err, { provider: "anthropic" });
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        const data = (e as APICallError).data as any;
+        expect(data.code).toBe("AUTH_FAILED");
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts 403 statusCode to authentication error", () => {
+      const err = Object.assign(new Error("Forbidden"), {
+        statusCode: 403,
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        const data = (e as APICallError).data as any;
+        expect(data.code).toBe("AUTH_FAILED");
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts 429 statusCode to retryable rate limit error", () => {
+      const err = Object.assign(new Error("Too Many Requests"), {
+        statusCode: 429,
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect((e as APICallError).isRetryable).toBe(true);
+        expect((e.data as any).code).toBe("RATE_LIMIT");
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts 408 statusCode to timeout error", () => {
+      const err = Object.assign(new Error("Request Timeout"), {
+        statusCode: 408,
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect(isTimeoutError(e)).toBe(true);
+        expect((e as APICallError).isRetryable).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts 500 statusCode to retryable error", () => {
+      const err = Object.assign(new Error("Internal Server Error"), {
+        statusCode: 500,
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect((e as APICallError).isRetryable).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts 503 statusCode to retryable error", () => {
+      const err = Object.assign(new Error("Service Unavailable"), {
+        statusCode: 503,
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect((e as APICallError).isRetryable).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts 400 statusCode to non-retryable error", () => {
+      const err = Object.assign(new Error("Bad Request"), {
+        statusCode: 400,
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect((e as APICallError).isRetryable).toBe(false);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+  });
+
+  describe("Node.js error codes", () => {
+    it("converts ETIMEDOUT to timeout error", () => {
+      const err = Object.assign(new Error("Connection timed out"), {
+        code: "ETIMEDOUT",
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect(isTimeoutError(e)).toBe(true);
+        expect((e as APICallError).isRetryable).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts ESOCKETTIMEDOUT to timeout error", () => {
+      const err = Object.assign(new Error("Socket timeout"), {
+        code: "ESOCKETTIMEDOUT",
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect(isTimeoutError(e)).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts ECONNRESET to retryable error", () => {
+      const err = Object.assign(new Error("Connection reset"), {
+        code: "ECONNRESET",
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect((e as APICallError).isRetryable).toBe(true);
+        expect((e.data as any).code).toBe("ECONNRESET");
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts ECONNREFUSED to retryable error", () => {
+      const err = Object.assign(new Error("Connection refused"), {
+        code: "ECONNREFUSED",
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect((e as APICallError).isRetryable).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("converts ENOTFOUND to non-retryable error", () => {
+      const err = Object.assign(new Error("DNS lookup failed"), {
+        code: "ENOTFOUND",
+      });
+      try {
+        handlePiError(err);
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect((e as APICallError).isRetryable).toBe(false);
+        expect((e.data as any).code).toBe("ENOTFOUND");
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+  });
+
+  describe("pi-ai overflow patterns", () => {
+    it("matches Anthropic overflow pattern", () => {
+      try {
+        handlePiError(
+          new Error("prompt is too long: 213462 tokens > 200000 maximum"),
+        );
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect(isContextOverflowError(e)).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("matches OpenAI overflow pattern", () => {
+      try {
+        handlePiError(
+          new Error("Your input exceeds the context window of this model"),
+        );
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect(isContextOverflowError(e)).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+
+    it("matches Google overflow pattern", () => {
+      try {
+        handlePiError(new Error("The input token count exceeds the maximum"));
+      } catch (e) {
+        expect(e).toBeInstanceOf(APICallError);
+        expect(isContextOverflowError(e)).toBe(true);
+        return;
+      }
+      expect.unreachable("Should have thrown");
+    });
+  });
+});
+
+describe("isContextOverflow re-export", () => {
+  it("is a function re-exported from pi-ai", () => {
+    expect(typeof isContextOverflow).toBe("function");
   });
 });

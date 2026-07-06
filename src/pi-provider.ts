@@ -141,6 +141,23 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
     });
   };
 
+  /** Resolves a toolSet preset to a tools string array. */
+  const TOOL_SET_PRESETS: Record<string, string[]> = {
+    coding: ["Bash", "Edit", "Write", "Read"],
+    readOnly: ["Read", "Grep", "Find", "LS", "Glob"],
+    all: ["Bash", "Edit", "Write", "Read", "Grep", "Find", "LS", "Glob"],
+  };
+
+  function resolveToolSet(
+    toolSet: string | undefined,
+    fallback: string[] | undefined,
+  ): string[] | undefined {
+    if (toolSet != null) {
+      return TOOL_SET_PRESETS[toolSet] ?? fallback;
+    }
+    return fallback;
+  }
+
   const createModel = (
     modelId: PiModelId,
     settings: PiLanguageModelSettings = {},
@@ -151,7 +168,10 @@ export function createPi(options: PiProviderSettings = {}): PiProvider {
       // Provider-level cwd as fallback
       cwd: settings.cwd ?? options.cwd,
       // Provider-level tool settings as fallback
-      tools: settings.tools ?? options.tools,
+      tools: resolveToolSet(
+        settings.toolSet ?? options.toolSet,
+        settings.tools ?? options.tools,
+      ),
       excludeTools: settings.excludeTools ?? options.excludeTools,
     };
 

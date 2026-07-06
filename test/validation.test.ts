@@ -158,6 +158,71 @@ describe("validateProviderSettings", () => {
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("Verbose");
   });
+  it("rejects unknown keys in provider settings", () => {
+    expect(() =>
+      validateProviderSettings({ unknownKey: "value" } as any),
+    ).toThrow("Unknown setting 'unknownKey'");
+  });
+
+  it("rejects multiple unknown keys, reporting the first one found", () => {
+    expect(() =>
+      validateProviderSettings({
+        foo: 1,
+        bar: 2,
+      } as any),
+    ).toThrow("Unknown setting 'foo'");
+  });
+
+  it("validates logger shape when logger is provided", () => {
+    const validLogger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    };
+    const result = validateProviderSettings({ logger: validLogger });
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("rejects logger missing a required method", () => {
+    const badLogger = {
+      debug: () => {},
+      info: () => {},
+      // missing warn and error
+    };
+    expect(() =>
+      validateProviderSettings({ logger: badLogger } as any),
+    ).toThrow("Logger must implement a 'warn' method");
+  });
+
+  it("rejects logger with non-function methods", () => {
+    const badLogger = {
+      debug: "not a function",
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    };
+    expect(() =>
+      validateProviderSettings({ logger: badLogger } as any),
+    ).toThrow("Logger must implement a 'debug' method");
+  });
+
+  it("rejects non-object logger", () => {
+    expect(() => validateProviderSettings({ logger: "string" } as any)).toThrow(
+      "Logger must be a non-null object",
+    );
+  });
+
+  it("rejects null logger", () => {
+    expect(() => validateProviderSettings({ logger: null } as any)).toThrow(
+      "Logger must be a non-null object",
+    );
+  });
+
+  it("does not validate logger when logger is false", () => {
+    const result = validateProviderSettings({ logger: false });
+    expect(result.warnings).toEqual([]);
+  });
 });
 
 describe("validateModelSettings", () => {
@@ -184,6 +249,18 @@ describe("validateModelSettings", () => {
     });
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("tools and excludeTools");
+  });
+
+  it("rejects unknown keys in model settings", () => {
+    expect(() => validateModelSettings({ unknownOption: true } as any)).toThrow(
+      "Unknown setting 'unknownOption'",
+    );
+  });
+
+  it("reports the allowed keys in the error message", () => {
+    expect(() => validateModelSettings({ badKey: 1 } as any)).toThrow(
+      /Allowed keys:/,
+    );
   });
 });
 

@@ -24,25 +24,49 @@ export type { PiErrorMetadata } from "./errors.js";
  */
 export {
   createAPICallError,
+  createAbortError,
   createAuthenticationError,
   createContextOverflowError,
   createTimeoutError,
   getErrorMetadata,
   handlePiError,
+  isAbortError,
   isAuthenticationError,
   isContextOverflowError,
+  isRetryableError,
   isTimeoutError,
+  RETRYABLE_CODES,
+  NON_RETRYABLE_CODES,
 } from "./errors.js";
+// Re-export pi-ai's isContextOverflow for AssistantMessage-based overflow detection
+export { isContextOverflow } from "./errors.js";
 /**
  * Finish reason mapping.
  * Maps Pi SDK stopReason values to AI SDK finish reasons.
  */
 export { mapPiFinishReason } from "./map-pi-finish-reason.js";
+
+/**
+ * Tool mapping utilities.
+ * Safe serialization, structured truncation, and Pi-to-AI SDK mapping
+ * for tool calls and tool results.
+ */
+export {
+  DEFAULT_MAX_TOOL_RESULT_SIZE,
+  mapPiToolCall,
+  mapPiToolResult,
+  safeStringify,
+  toJsonValue,
+  truncateJsonValue,
+} from "./tool-mapper.js";
+export type { TruncateResult } from "./tool-mapper.js";
+
 /**
  * Language model implementation for Pi.
  * This class implements the AI SDK's LanguageModelV3 interface.
  */
 export { PiLanguageModel } from "./pi-language-model.js";
+export { PiSessionManager } from "./pi-session-manager.js";
 /**
  * Type definitions for the Pi provider.
  * @see {@link PiProvider} for the provider interface

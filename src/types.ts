@@ -116,6 +116,12 @@ export interface PiProviderSettings {
   excludeTools?: string[];
 
   /**
+   * Convenience preset for tool selection (provider-level default).
+   * Overridden by model-level `toolSet`.
+   */
+  toolSet?: "coding" | "readOnly" | "all";
+
+  /**
    * Suppress all tools. "all" removes everything, "builtin" keeps only custom tools.
    */
   noTools?: "all" | "builtin";
@@ -196,6 +202,15 @@ export interface PiLanguageModelSettings {
    * Overrides provider-level excludeTools.
    */
   excludeTools?: string[];
+
+  /**
+   * Convenience preset for tool selection.
+   * - 'coding' — coding tools (bash, edit, write, read)
+   * - 'readOnly' — read-only tools (read, grep, find, ls)
+   * - 'all' — all available tools
+   * Overrides individual `tools` when set.
+   */
+  toolSet?: "coding" | "readOnly" | "all";
 
   /**
    * Maximum budget in USD for the query.
