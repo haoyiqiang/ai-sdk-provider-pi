@@ -6,6 +6,11 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PiLanguageModel } from "../src/pi-language-model.js";
 import type { PiLanguageModelOptions } from "../src/types.js";
+import {
+  createEmptyUsage,
+  extractToolCallFromPartial,
+  truncateToolResult,
+} from "../src/stream-mapper.js";
 
 // ─── Mock factories ───
 
@@ -265,7 +270,10 @@ describe("PiLanguageModel", () => {
         type: "message_end",
         message: {
           role: "assistant",
-          content: [],
+          content: [
+            { type: "thinking", thinking: "Let me think..." },
+            { type: "text", text: "My answer" },
+          ],
           api: "anthropic-messages",
           provider: "anthropic",
           model: "claude-sonnet-4",
@@ -337,7 +345,14 @@ describe("PiLanguageModel", () => {
         type: "message_end",
         message: {
           role: "assistant",
-          content: [],
+          content: [
+            {
+              type: "toolCall",
+              id: "tc_1",
+              name: "read",
+              arguments: { path: "/tmp/test.txt" },
+            },
+          ],
           api: "anthropic-messages",
           provider: "anthropic",
           model: "claude-sonnet-4",
@@ -540,6 +555,71 @@ describe("PiLanguageModel", () => {
         (w) => w.type === "unsupported",
       );
       expect(unsupportedWarnings.length).toBe(2);
+    });
+
+    it("seeds prior conversation history into session agent state", async () => {
+      const model = new PiLanguageModel(createModelOptions());
+      const generatePromise = model.doGenerate({
+        prompt: [
+          { role: "user", content: [{ type: "text", text: "First question" }] },
+          {
+            role: "assistant",
+            content: [{ type: "text", text: "First answer" }],
+          },
+          {
+            role: "user",
+            content: [{ type: "text", text: "Second question" }],
+          },
+        ],
+      });
+
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+
+      // The agent state should contain the first user message and assistant
+      // message as "prior" history. The last user message is used as the
+      // prompt text, not seeded.
+      const agentMessages = mockSession.session.agent.state.messages as Array<{
+        role: string;
+      }>;
+      expect(agentMessages).toHaveLength(2);
+      expect(agentMessages[0].role).toBe("user");
+      expect(agentMessages[1].role).toBe("assistant");
+
+      // Complete the turn so the test doesn't hang
+      mockSession.emitEvent({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+          usage: {
+            input: 10,
+            output: 5,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 15,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+      mockSession.resolvePrompt();
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
+
+      await generatePromise;
     });
   });
 
@@ -845,21 +925,19 @@ describe("PiLanguageModel", () => {
 
     it("calls session.dispose() and clears session", () => {
       const model = new PiLanguageModel(createModelOptions());
-
-      // Force session creation
-      (model as any).session = mockSession.session;
-      (model as any).sessionId = "test-session-123";
+      // Force session creation by setting internal state
+      (model as any).sessionManager.session = mockSession.session;
+      (model as any).sessionManager.sessionId = "test-session-123";
 
       model.dispose();
-
       expect(mockSession.disposeFn).toHaveBeenCalledOnce();
-      expect((model as any).session).toBeNull();
-      expect((model as any).sessionId).toBeUndefined();
+      expect((model as any).sessionManager.currentSession).toBeNull();
+      expect((model as any).sessionManager.currentSessionId).toBeUndefined();
     });
 
     it("is safe to call multiple times", () => {
       const model = new PiLanguageModel(createModelOptions());
-      (model as any).session = mockSession.session;
+      (model as any).sessionManager.session = mockSession.session;
       model.dispose();
       model.dispose();
       expect(mockSession.disposeFn).toHaveBeenCalledOnce();
@@ -992,8 +1070,8 @@ describe("PiLanguageModel", () => {
       await expect(promise1).rejects.toThrow();
 
       // After invalidation, the old session should be cleared
-      expect((model as any).session).toBeNull();
-      expect((model as any).sessionId).toBeUndefined();
+      expect((model as any).sessionManager.currentSession).toBeNull();
+      expect((model as any).sessionManager.currentSessionId).toBeUndefined();
 
       // Create a new mock session for the second call
       const newMockSession = createMockSession();
@@ -1045,30 +1123,134 @@ describe("PiLanguageModel", () => {
 
       await promise2;
     });
+
+    it("serializes concurrent session.prompt() calls (second waits for first)", async () => {
+      const mockSession = createMockSession();
+      piCodingAgent.__setMockSession(mockSession.session);
+
+      piCodingAgent.createAgentSession.mockClear();
+
+      const model = new PiLanguageModel(createModelOptions());
+
+      // Fire two concurrent doGenerate calls on the same model/session.
+      const promise1 = model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "First" }] }],
+      });
+      const promise2 = model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "Second" }] }],
+      });
+
+      // The first call acquires the session and fires its prompt().
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(1));
+      expect(mockSession.promptCalls[0].text).toBe("First");
+
+      // Give the second call plenty of time to (incorrectly) start. Under
+      // serialization it must NOT issue a second prompt() until the first
+      // turn completes.
+      await new Promise((r) => setTimeout(r, 50));
+      expect(mockSession.promptCalls.length).toBe(1);
+
+      // Complete the first turn: emit message_end, resolve the prompt
+      // promise, then emit agent_end so the first doGenerate resolves.
+      mockSession.emitEvent({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+          usage: {
+            input: 10,
+            output: 5,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 15,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+      mockSession.resolvePrompt();
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
+
+      await promise1;
+
+      // Now the second call is allowed to start.
+      await vi.waitFor(() => expect(mockSession.promptCalls.length).toBe(2));
+      expect(mockSession.promptCalls[1].text).toBe("Second");
+
+      // Complete the second turn.
+      mockSession.emitEvent({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "anthropic-messages",
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+          stopReason: "stop",
+          timestamp: Date.now(),
+        } as AssistantMessage,
+      });
+      mockSession.resolvePrompt();
+      mockSession.emitEvent({
+        type: "agent_end",
+        messages: [],
+        willRetry: false,
+      });
+
+      await promise2;
+
+      // Only one session was ever created.
+      expect(piCodingAgent.createAgentSession).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("truncateToolResult", () => {
     it("returns full result when below max size", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).truncateToolResult("short result");
+      const result = truncateToolResult("short result", 10_000);
       expect(result).toBe("short result");
     });
 
     it("truncates result exceeding max size", () => {
       const model = new PiLanguageModel(createModelOptions());
       const longText = "a".repeat(15_000);
-      const result = (model as any).truncateToolResult(longText);
+      const result = truncateToolResult(longText, 10_000);
       expect(result.length).toBeLessThan(longText.length);
       expect(result).toContain("[truncated");
       expect(result).toContain("chars]");
     });
 
     it("respects custom maxToolResultSize", () => {
-      const model = new PiLanguageModel(
-        createModelOptions({ settings: { maxToolResultSize: 50 } }),
-      );
       const longText = "a".repeat(100);
-      const result = (model as any).truncateToolResult(longText);
+      const result = truncateToolResult(longText, 50);
       expect(result.length).toBeLessThanOrEqual(
         50 + "[truncated X chars]".length + 10,
       );
@@ -1102,24 +1284,26 @@ describe("PiLanguageModel", () => {
   describe("extractToolCallFromPartial", () => {
     it("returns null when partial has no content", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial({}, 0);
+      const result = extractToolCallFromPartial({} as any, 0, () => "test-id");
       expect(result).toBeNull();
     });
 
     it("returns null when content is not an array", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial(
-        { content: "string" },
+      const result = extractToolCallFromPartial(
+        { content: "string" } as any,
         0,
+        () => "test-id",
       );
       expect(result).toBeNull();
     });
 
     it("returns null when content item is not a toolCall", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const result = (model as any).extractToolCallFromPartial(
-        { content: [{ type: "text", text: "hello" }] },
+      const result = extractToolCallFromPartial(
+        { content: [{ type: "text", text: "hello" }] } as any,
         0,
+        () => "test-id",
       );
       expect(result).toBeNull();
     });
@@ -1149,11 +1333,81 @@ describe("PiLanguageModel", () => {
   describe("createEmptyUsage", () => {
     it("returns a correctly structured empty usage object", () => {
       const model = new PiLanguageModel(createModelOptions());
-      const usage = (model as any).createEmptyUsage();
+      const usage = createEmptyUsage();
       expect(usage).toHaveProperty("inputTokens");
       expect(usage).toHaveProperty("outputTokens");
       expect(usage.inputTokens.total).toBeUndefined();
       expect(usage.outputTokens.total).toBeUndefined();
+    });
+  });
+
+  describe("verbose gating", () => {
+    it("silences debug/info when verbose is falsy (default)", () => {
+      const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const model = new PiLanguageModel(
+          createModelOptions({
+            providerSettings: {}, // no logger, no verbose
+          }),
+        );
+        const logger = (model as any).logger;
+        logger.debug("dbg");
+        logger.info("inf");
+        logger.warn("wn");
+        logger.error("err");
+
+        expect(debugSpy).not.toHaveBeenCalled();
+        expect(infoSpy).not.toHaveBeenCalled();
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        debugSpy.mockRestore();
+        infoSpy.mockRestore();
+        warnSpy.mockRestore();
+      }
+    });
+
+    it("enables debug/info when verbose is true", () => {
+      const debugSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+      const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+      try {
+        const model = new PiLanguageModel(
+          createModelOptions({
+            providerSettings: { verbose: true },
+          }),
+        );
+        const logger = (model as any).logger;
+        logger.debug("dbg");
+        logger.info("inf");
+
+        expect(debugSpy).toHaveBeenCalledTimes(1);
+        expect(infoSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        debugSpy.mockRestore();
+        infoSpy.mockRestore();
+      }
+    });
+
+    it("silences everything when logger: false", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        const model = new PiLanguageModel(
+          createModelOptions({ providerSettings: { logger: false } }),
+        );
+        const logger = (model as any).logger;
+        logger.debug("dbg");
+        logger.info("inf");
+        logger.warn("wn");
+        logger.error("err");
+
+        expect(warnSpy).not.toHaveBeenCalled();
+        expect(errorSpy).not.toHaveBeenCalled();
+      } finally {
+        warnSpy.mockRestore();
+        errorSpy.mockRestore();
+      }
     });
   });
 });
