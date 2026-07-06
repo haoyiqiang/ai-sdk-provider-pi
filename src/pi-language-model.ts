@@ -31,7 +31,6 @@ import { PiSessionManager } from "./pi-session-manager.js";
 import { mapPiFinishReason } from "./map-pi-finish-reason.js";
 import {
   DEFAULT_MAX_TOOL_RESULT_SIZE,
-  mapPiToolCall,
   mapPiToolResult,
 } from "./tool-mapper.js";
 import type {
@@ -40,8 +39,6 @@ import type {
   PiLanguageModelSettings,
   PiProviderMetadata,
   PiProviderSettings,
-  SandboxConfig,
-  ToolStreamState,
 } from "./types.js";
 
 import { createEmptyUsage, extractUsage, mapPiEventToStreamParts, toProviderMetadata } from "./stream-mapper.js";
